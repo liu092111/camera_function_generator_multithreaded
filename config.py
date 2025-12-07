@@ -63,6 +63,9 @@ PLOT_RANGE_SCALE = 1.35         # 圖表範圍縮放因子
 # ========== 函數產生器設定 ==========
 FG_RESOURCE_STRING = 'USB0::0x0957::0x5707::MY59001615::0::INSTR'
 
+# 統一電壓設定（V）- 修改此值會自動套用到所有模式
+VOLTAGE = 1.2
+
 # 模式配置
 FG_MODE_CONFIGS = {
     1: {
@@ -70,8 +73,8 @@ FG_MODE_CONFIGS = {
         'file2': 'modal/ONEPERIOD_B_25k_50k_264p88deg_2000pts.csv',
         'name1': 'WF_25K_84',
         'name2': 'WF_25K_264',
-        'ch1_volt': 1.2,  # 可調整電壓（V）
-        'ch2_volt': 1.2,  # 可調整電壓（V）
+        'ch1_volt': VOLTAGE,
+        'ch2_volt': VOLTAGE,
         'ch1_pol': 'NORM',
         'ch2_pol': 'INV',
         'desc': '25k Hz, CH1=NORM, CH2=INV'
@@ -81,8 +84,8 @@ FG_MODE_CONFIGS = {
         'file2': 'modal/ONEPERIOD_D_47k_94k_237p32deg_2000pts.csv',
         'name1': 'WF_47K_57',
         'name2': 'WF_47K_237',
-        'ch1_volt': 1.2,  # 可調整電壓（V）
-        'ch2_volt': 1.2,  # 可調整電壓（V）
+        'ch1_volt': VOLTAGE,
+        'ch2_volt': VOLTAGE,
         'ch1_pol': 'NORM',
         'ch2_pol': 'INV',
         'desc': '47k Hz, CH1=NORM, CH2=INV'
@@ -92,8 +95,8 @@ FG_MODE_CONFIGS = {
         'file2': 'modal/ONEPERIOD_B_25k_50k_264p88deg_2000pts.csv',
         'name1': 'WF_25K_84',
         'name2': 'WF_25K_264',
-        'ch1_volt': 1.2,  # 可調整電壓（V）
-        'ch2_volt': 1.2,  # 可調整電壓（V）
+        'ch1_volt': VOLTAGE,
+        'ch2_volt': VOLTAGE,
         'ch1_pol': 'INV',
         'ch2_pol': 'NORM',
         'desc': '25k Hz, CH1=INV, CH2=NORM'
@@ -103,8 +106,8 @@ FG_MODE_CONFIGS = {
         'file2': 'modal/ONEPERIOD_D_47k_94k_237p32deg_2000pts.csv',
         'name1': 'WF_47K_57',
         'name2': 'WF_47K_237',
-        'ch1_volt': 1.2,  # 可調整電壓（V）
-        'ch2_volt': 1.2,  # 可調整電壓（V）
+        'ch1_volt': VOLTAGE,
+        'ch2_volt': VOLTAGE,
         'ch1_pol': 'INV',
         'ch2_pol': 'NORM',
         'desc': '47k Hz, CH1=INV, CH2=NORM'

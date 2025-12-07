@@ -16,10 +16,12 @@ import time
 import threading
 import queue
 from datetime import datetime
+import numpy as np
 
 from config import (
     MODE, CAMERA_INDEX, CAM_WIDTH, CAM_HEIGHT, CAM_FPS_REQ,
-    RECORD_OUTPUT, WINDOW_TITLE, FRAME_QUEUE_SIZE, RESULT_QUEUE_SIZE
+    RECORD_OUTPUT, WINDOW_TITLE, FRAME_QUEUE_SIZE, RESULT_QUEUE_SIZE,
+    VOLTAGE
 )
 from stats import Stats
 from function_generator import FunctionGeneratorController
@@ -103,7 +105,7 @@ def main():
         cx0, cy0, ang0 = CAM_WIDTH/2.0, CAM_HEIGHT/2.0, 0.0
         print("未檢測到目標，使用預設位置")
     
-    kf.statePost = [[cx0], [cy0], [0.0], [0.0]]
+    kf.statePost = np.array([[cx0], [cy0], [0.0], [0.0]], dtype=np.float32)
     
     # 共享狀態
     running = [True]
@@ -154,7 +156,9 @@ def main():
                 if tracker_state['recording'] and RECORD_OUTPUT:
                     if writer is None:
                         run_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        output_dir = f"{run_tag}_{MODE}_integrated_mt"
+                        # 將電壓格式化為字串
+                        voltage_str = str(VOLTAGE)
+                        output_dir = f"{run_tag}_{MODE}_{voltage_str}V"
                         os.makedirs(output_dir, exist_ok=True)
                         
                         # 使用 AVI 格式以確保兼容性

@@ -92,16 +92,19 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
     print("生成圖表...")
     plot_paths = generate_plots(df, output_dir, OUT_PREFIX)
     
-    # 生成新的軌跡圖和組圖
-    if len(box_rec) >= 8 and valid.any():
-        print("生成軌跡輪廓圖和8時間點組圖...")
-        try:
-            additional_plots = generate_trajectory_and_composite(
-                df, box_rec, output_dir, OUT_PREFIX, mm_per_px, x0, y0
-            )
-            plot_paths.update(additional_plots)
-        except Exception as e:
-            print(f"  警告：生成額外圖表時發生錯誤: {e}")
+    # 生成軌跡輪廓圖和組圖
+    if len(box_rec) > 0 and valid.any():
+        valid_boxes_count = sum(1 for _, _, fx, fy, box in box_rec 
+                                if box is not None and np.isfinite(fx) and np.isfinite(fy))
+        
+        if valid_boxes_count >= 4:
+            try:
+                additional_plots = generate_trajectory_and_composite(
+                    df, box_rec, output_dir, OUT_PREFIX, mm_per_px, x0, y0
+                )
+                plot_paths.update(additional_plots)
+            except Exception as e:
+                print(f"生成額外圖表時發生錯誤: {e}")
     
     print(f"\n✓ 資料已輸出到: {output_dir}")
     print(f"  - CSV: {os.path.basename(csv_path)}")
@@ -160,7 +163,7 @@ def generate_plots(df, output_dir, OUT_PREFIX):
     ax_pos.set_aspect("equal", adjustable="box")
     ax_pos.set_xlabel("x (mm)")
     ax_pos.set_ylabel("y (mm)")
-    ax_pos.set_title("Position (Trajectory)")
+    ax_pos.set_title("Position")
     ax_pos.grid(True, linestyle="--", alpha=0.4)
     ax_pos.legend(loc="best")
     
@@ -268,8 +271,8 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
     valid_boxes = [(idx, ts, fx, fy, box) for idx, ts, fx, fy, box in box_rec 
                    if box is not None and np.isfinite(fx) and np.isfinite(fy)]
     
-    if len(valid_boxes) < 8:
-        print(f"  警告：只有 {len(valid_boxes)} 個有效框，需要至少 8 個")
+    if len(valid_boxes) < 4:
+        print(f"  警告：只有 {len(valid_boxes)} 個有效框，需要至少 4 個")
         return plot_paths
     
     # === 1. 生成軌跡輪廓圖 ===
@@ -280,8 +283,8 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
     y_plot = df["y_mm"].to_numpy()
     ax_contour.plot(x_plot, y_plot, lw=2, color='blue', label="Trajectory", alpha=0.7)
     
-    # 選擇8個等間隔的時間點
-    n_segments = 8
+    # 選擇時間點（最多8個，最少4個）
+    n_segments = min(8, len(valid_boxes))
     indices = np.linspace(0, len(valid_boxes) - 1, n_segments, dtype=int)
     
     # 使用統一顏色虛線繪製輪廓
@@ -326,7 +329,16 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
         xc = 0.5 * (xmin + xmax)
         yc = 0.5 * (ymin + ymax)
         half_range = 0.5 * max(xmax - xmin, ymax - ymin)
-        half_range = max(half_range, 1e-6) * PLOT_RANGE_SCALE
+        
+        # rotation mode 時使用固定或自適應範圍
+        if MODE.lower() == "rotation":
+            # 對於 rotation mode，使用固定範圍（例如 ±15mm）來更清楚地顯示軌跡
+            # 如果實際範圍大於固定範圍，則使用實際範圍
+            fixed_half_range = 15.0  # mm，可根據需要調整
+            half_range = max(half_range * PLOT_RANGE_SCALE, fixed_half_range)
+        else:
+            half_range = max(half_range, 1e-6) * PLOT_RANGE_SCALE
+        
         ax_contour.set_xlim(xc - half_range, xc + half_range)
         ax_contour.set_ylim(yc - half_range, yc + half_range)
     
@@ -336,7 +348,7 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
     ax_contour.set_aspect("equal", adjustable="box")
     ax_contour.set_xlabel("x (mm)")
     ax_contour.set_ylabel("y (mm)")
-    ax_contour.set_title("Center Trajectory with 8 Time Points")
+    ax_contour.set_title(f"Trajectory with Time Points")
     ax_contour.grid(True, linestyle="--", alpha=0.4)
     ax_contour.legend(loc="best")
     
@@ -345,47 +357,75 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
     plt.close(figC)
     plot_paths['trajectory_contour'] = plot_contour_path
     
-    # === 2. 生成 8 個時間點組圖（需要原始影片）===
+    # === 2. 生成時間點組圖（需要原始影片）===
     raw_video_path = os.path.join(output_dir, f"camera_{MODE}_raw.avi")
+    
     if not os.path.exists(raw_video_path):
-        # 嘗試 mp4 格式
         raw_video_path = os.path.join(output_dir, f"camera_{MODE}_raw.mp4")
         if not os.path.exists(raw_video_path):
-            print(f"  警告：找不到原始影片，跳過組圖生成")
             return plot_paths
     
     try:
-        # 重新開啟原始影片
         cap_composite = cv2.VideoCapture(raw_video_path)
         
-        # 提取對應的 frame 編號和時間
-        snapshot_frames = []
+        if not cap_composite.isOpened():
+            return plot_paths
+        
+        total_frames_in_video = int(cap_composite.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # 使用 valid_boxes 在整個 box_rec 中的索引來對應影片幀
+        # valid_boxes 的索引對應到 box_rec 的索引，而 box_rec 與錄製的幀一一對應
+        # 所以 indices[i] 在 valid_boxes 中的位置就是影片中的實際幀號
+        snapshot_video_frames = indices.copy()  # 這些是在 valid_boxes 列表中的索引
         snapshot_times = []
+        
         for idx in indices:
-            frame_idx_val, t_s_val, _, _, _ = valid_boxes[idx]
-            snapshot_frames.append(frame_idx_val)
-            # 計算相對時間（從第一個有效幀開始為 0s）
+            _, t_s_val, _, _, _ = valid_boxes[idx]
             first_valid_time = valid_boxes[0][1]
             relative_time = t_s_val - first_valid_time
             snapshot_times.append(relative_time)
         
-        # 建立 frame 到 df row 的映射
+        # 建立 DataFrame frame 到行索引的映射
         row_map = {int(r['frame']): i for i, r in df.iterrows()}
         
-        # 提取畫面並繪製中心路徑和累積輪廓
+        # 同時建立 valid_boxes 索引到 DataFrame frame 的映射
+        valid_box_to_df_frame = {}
+        for i, (frame_idx_val, _, _, _, _) in enumerate(valid_boxes):
+            valid_box_to_df_frame[i] = frame_idx_val
+        
         extracted_frames = []
         
-        for snap_idx, frame_num in enumerate(snapshot_frames):
-            cap_composite.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+        for snap_idx, valid_box_idx in enumerate(snapshot_video_frames):
+            # valid_box_idx 是在 valid_boxes 中的索引
+            # 我們需要找到這個 box 在錄製序列中的位置
+            # 由於 valid_boxes 是從 box_rec 篩選出來的，我們需要找到它在原始序列中的位置
+            
+            # 更簡單的方法：直接用 valid_box_idx 作為在 valid_boxes 中的索引
+            # 然後找到對應的原始 box_rec 條目
+            target_frame_idx, _, target_fx, target_fy, target_box = valid_boxes[valid_box_idx]
+            
+            # 在原始影片中，我們需要找到這一幀的位置
+            # box_rec 的順序應該與錄製順序一致
+            # 找到這個 frame_idx 在 box_rec 中的位置
+            video_frame_num = None
+            for video_idx, (rec_frame_idx, _, _, _, _) in enumerate(box_rec):
+                if rec_frame_idx == target_frame_idx:
+                    video_frame_num = video_idx
+                    break
+            
+            if video_frame_num is None or video_frame_num >= total_frames_in_video:
+                continue
+            
+            cap_composite.set(cv2.CAP_PROP_POS_FRAMES, video_frame_num)
             ok, frame = cap_composite.read()
             if not ok:
                 continue
             
-            # 繪製該時間點之前的所有輪廓（淺藍色虛線）
+            # 繪製該時間點之前的所有輪廓（淺藍色虛線）- 累積顯示
             light_blue = (255, 200, 150)  # BGR 淺藍色
             for i in range(snap_idx + 1):  # 包含當前時間點
-                box_idx = indices[i]
-                _, _, _, _, box = valid_boxes[box_idx]
+                box_idx_in_valid = snapshot_video_frames[i]
+                _, _, _, _, box = valid_boxes[box_idx_in_valid]
                 if box is not None:
                     box_int = np.int32(box)
                     # 繪製虛線輪廓
@@ -410,29 +450,29 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
             
             # 繪製完整的中心路徑（從起點到當前時間點的所有位置）
             center_color_composite = (255, 0, 0)  # BGR 藍色
-            current_frame_num = snapshot_frames[snap_idx]
+            current_df_frame = valid_boxes[valid_box_idx][0]  # 獲取 DataFrame 中的 frame 編號
             
             # 收集所有從起點到當前幀的位置
             path_points = []
             for idx in range(len(df)):
-                if df.iloc[idx]['frame'] <= current_frame_num:
+                if df.iloc[idx]['frame'] <= current_df_frame:
                     fx_val = df.iloc[idx]['x_px_filt']
                     fy_val = df.iloc[idx]['y_px_filt']
                     if np.isfinite(fx_val) and np.isfinite(fy_val):
-                        path_points.append((int(round(fx_val)), int(round(fy_val))))
+                        path_points.append([int(round(fx_val)), int(round(fy_val))])
             
-            # 繪製完整路徑（連續的線）
+            # 繪製完整路徑（使用 polylines 讓路徑更順滑）
             if len(path_points) > 1:
-                for i in range(1, len(path_points)):
-                    cv2.line(frame, path_points[i-1], path_points[i], 
-                           center_color_composite, 2)
+                pts = np.array(path_points, dtype=np.int32)
+                cv2.polylines(frame, [pts], isClosed=False, color=center_color_composite, thickness=2)
             
-            # 在8個snapshot點上畫圓標記（純藍色）
+            # 在所有已經過的時間點上畫圓標記（純藍色）
             for i in range(snap_idx + 1):
-                df_idx = snapshot_frames[i]
-                if df_idx in row_map:
-                    fx_px = df.iloc[row_map[df_idx]]['x_px_filt']
-                    fy_px = df.iloc[row_map[df_idx]]['y_px_filt']
+                box_idx_for_circle = snapshot_video_frames[i]
+                df_frame_for_circle = valid_boxes[box_idx_for_circle][0]
+                if df_frame_for_circle in row_map:
+                    fx_px = df.iloc[row_map[df_frame_for_circle]]['x_px_filt']
+                    fy_px = df.iloc[row_map[df_frame_for_circle]]['y_px_filt']
                     if np.isfinite(fx_px) and np.isfinite(fy_px):
                         cx_i = int(round(fx_px))
                         cy_i = int(round(fy_px))
@@ -485,9 +525,8 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
         
         cap_composite.release()
         
-        # 將 8 張圖水平拼接
-        if len(extracted_frames) == 8:
-            # 調整每張圖的大小
+        # 將圖水平拼接
+        if len(extracted_frames) == n_segments:
             target_height = 300
             resized_frames = []
             for frame in extracted_frames:
@@ -497,17 +536,26 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
                 resized = cv2.resize(frame, (new_width, target_height))
                 resized_frames.append(resized)
             
-            # 水平拼接
             combined_frame = np.hstack(resized_frames)
-            
-            # 保存組圖
-            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_8_timepoints_composite.png")
+            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_{n_segments}_timepoints_composite.png")
             cv2.imwrite(composite_path, combined_frame)
             plot_paths['composite'] = composite_path
-        else:
-            print(f"  警告：只提取到 {len(extracted_frames)} 個畫面")
+        elif len(extracted_frames) > 0:
+            target_height = 300
+            resized_frames = []
+            for frame in extracted_frames:
+                h, w = frame.shape[:2]
+                scale = target_height / h
+                new_width = int(w * scale)
+                resized = cv2.resize(frame, (new_width, target_height))
+                resized_frames.append(resized)
+            
+            combined_frame = np.hstack(resized_frames)
+            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_{len(extracted_frames)}_timepoints_composite.png")
+            cv2.imwrite(composite_path, combined_frame)
+            plot_paths['composite'] = composite_path
     
     except Exception as e:
-        print(f"  警告：生成組圖時發生錯誤: {e}")
+        print(f"生成組圖時發生錯誤: {e}")
     
     return plot_paths
