@@ -1,0 +1,32 @@
+# 整合式攝影機追蹤與函數產生器控制系統
+# Python 依賴套件清單
+
+# 核心依賴
+numpy>=1.19.0
+opencv-python>=4.5.0
+pandas>=1.2.0
+matplotlib>=3.3.0
+
+# 函數產生器控制（可選）
+pyvisa>=1.11.0
+pyvisa-py>=0.5.0
+
+# 訊號處理（可選，用於進階濾波）
+scipy>=1.6.0
+
+# 注意事項：
+# 1. pyvisa 和 pyvisa-py 用於函數產生器控制
+#    如果不使用函數產生器，可以不安裝
+# 2. scipy 用於 Savitzky-Golay 濾波器
+#    目前程式中未使用，但 config.py 中有檢查其可用性
+# 3. 建議使用 Python 3.7 或更高版本
+# 4. Windows 系統建議安裝 Visual C++ Build Tools
+#    以支援某些套件的編譯
+
+# 安裝指令：
+# pip install -r requirements.txt
+
+# 或分別安裝：
+# pip install numpy opencv-python pandas matplotlib
+# pip install pyvisa pyvisa-py  # 如需函數產生器支援
+# pip install scipy              # 如需進階訊號處理
