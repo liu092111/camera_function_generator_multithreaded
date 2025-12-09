@@ -13,8 +13,11 @@ CAM_WIDTH = 640    # 攝影機解析度寬度
 CAM_HEIGHT = 480   # 攝影機解析度高度
 CAM_FPS_REQ = 120  # 目標 FPS
 RECORD_OUTPUT = True
-WINDOW_TITLE = "Camera & Function Generator Control (Multithreaded)"
+WINDOW_TITLE = "Camera & Function Generator Control"
 DISPLAY_SCALE = 0.6  # 顯示視窗縮放比例（60%）
+
+# 統一電壓設定（V)
+VOLTAGE = 1.2
 
 # ========== 多執行緒設定 ==========
 FRAME_QUEUE_SIZE = 120   # 幀佇列大小（可緩存 1 秒的幀）
@@ -62,9 +65,6 @@ PLOT_RANGE_SCALE = 1.35         # 圖表範圍縮放因子
 
 # ========== 函數產生器設定 ==========
 FG_RESOURCE_STRING = 'USB0::0x0957::0x5707::MY59001615::0::INSTR'
-
-# 統一電壓設定（V）- 修改此值會自動套用到所有模式
-VOLTAGE = 1.2
 
 # 模式配置
 FG_MODE_CONFIGS = {
