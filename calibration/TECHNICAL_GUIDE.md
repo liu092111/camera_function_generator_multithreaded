@@ -12,6 +12,7 @@
 4. [如何驗證標定品質](#4-如何驗證標定品質)
 5. [輸出參數詳解](#5-輸出參數詳解)
 6. [參數的實際應用](#6-參數的實際應用)
+7. [優化功能說明](#7-優化功能說明)
 
 ---
 
@@ -99,14 +100,7 @@ K = [fx   0  cx]
 | fx, fy | 焦距（以像素為單位）|
 | cx, cy | 主點座標（光軸與圖像平面的交點）|
 
-### 2.3 外參矩陣 (Extrinsic Matrix)
-
-外參矩陣描述相機在世界座標系中的位置和方向：
-
-- **R (3×3)**: 旋轉矩陣
-- **t (3×1)**: 平移向量
-
-### 2.4 畸變模型
+### 2.3 畸變模型
 
 完整的畸變校正公式：
 
@@ -156,23 +150,21 @@ v = fy * y_distorted + cy
 │ 3. 求解標定參數 (calibrateCamera)                            │
 │    - 使用 Zhang 的標定方法                                   │
 │    - 最小化重投影誤差                                        │
-│    - 輸出: 內參矩陣、畸變係數、外參                          │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. 畸變校正 (undistort)                                      │
+│ 4. 優化：剔除高誤差圖片（新功能）                             │
+│    - 計算每張圖片的重投影誤差                                │
+│    - 自動剔除誤差最高的圖片                                  │
+│    - 重複直到達到目標誤差                                    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 5. 畸變校正 (undistort)                                      │
 │    - 使用標定參數反向映射                                    │
 │    - 生成無畸變圖像                                          │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-### 3.3 Zhang 標定法原理
-
-Zhang 標定法是目前最廣泛使用的相機標定方法：
-
-1. **單應性矩陣估計**：計算每張圖像的單應性矩陣 H
-2. **內參求解**：從多個 H 矩陣聯立方程求解內參
-3. **非線性優化**：使用 Levenberg-Marquardt 算法最小化重投影誤差
 
 ---
 
@@ -190,47 +182,24 @@ Zhang 標定法是目前最廣泛使用的相機標定方法：
 
 | 重投影誤差 | 品質評估 |
 |-----------|---------|
-| < 0.3 像素 | 優秀 |
+| < 0.3 像素 | ✓ 優秀 |
 | 0.3 - 0.5 像素 | 很好 |
 | 0.5 - 1.0 像素 | 良好 |
-| 1.0 - 2.0 像素 | 可接受 |
-| > 2.0 像素 | 需要重新標定 |
+| > 1.0 像素 | 需要改善 |
 
-**您的標定結果**：0.5456 像素 → **良好**
+**當前標定結果**：0.2943 像素 → **優秀！**
 
 ### 4.2 視覺驗證
 
 #### 角點檢測驗證
 查看 `corner_detection/` 資料夾中的圖像：
 - 角點是否準確落在棋盤格交叉點上
-- 角點連線是否形成規則的網格
+- 每張圖片標註了誤差值或 "EXCLUDED" 標記
 
 #### 校正效果驗證
 查看 `comparison/comparison.png`：
 - 直線是否變直
 - 邊緣畸變是否消除
-
-### 4.3 程式化驗證
-
-```python
-import cv2
-import numpy as np
-
-# 載入標定參數
-data = np.load("calibration_data.npz")
-mtx = data['mtx']
-dist = data['dist']
-
-# 計算每張圖像的重投影誤差
-total_error = 0
-for i in range(len(objpoints)):
-    imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
-    error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
-    total_error += error
-
-mean_error = total_error / len(objpoints)
-print(f"平均重投影誤差: {mean_error}")
-```
 
 ---
 
@@ -244,50 +213,39 @@ data = np.load("calibration_data.npz")
 print(data.files)  # ['mtx', 'dist', 'checkerboard_size', 'reprojection_error']
 ```
 
-### 5.2 內參矩陣 (mtx)
+### 5.2 當前標定結果
 
-您的標定結果：
+**內參矩陣 (mtx)**：
 ```
-mtx = [[1236.59    0.00  355.46]
-       [   0.00  944.25  189.43]
+mtx = [[1227.33    0.00  312.57]
+       [   0.00  935.81  160.28]
        [   0.00    0.00    1.00]]
 ```
 
 | 參數 | 值 | 意義 |
 |------|-----|------|
-| fx | 1236.59 | X方向焦距（像素）|
-| fy | 944.25 | Y方向焦距（像素）|
-| cx | 355.46 | 主點X座標 |
-| cy | 189.43 | 主點Y座標 |
+| fx | 1227.33 | X方向焦距（像素）|
+| fy | 935.81 | Y方向焦距（像素）|
+| cx | 312.57 | 主點X座標 |
+| cy | 160.28 | 主點Y座標 |
 
-**注意**：fx ≠ fy 表示像素不是正方形，這在某些相機中很常見。
-
-### 5.3 畸變係數 (dist)
-
-您的標定結果：
+**畸變係數 (dist)**：
 ```
 dist = [k1, k2, p1, p2, k3]
-     = [-0.373, -0.900, -0.004, -0.001, 12.18]
+     = [-0.524, 3.507, -0.0003, 0.0015, -32.89]
 ```
 
 | 係數 | 值 | 類型 | 說明 |
 |------|-----|------|------|
-| k1 | -0.373 | 徑向 | 主要畸變項（負值=桶形畸變）|
-| k2 | -0.900 | 徑向 | 二次畸變項 |
-| k3 | 12.18 | 徑向 | 高階畸變項 |
-| p1 | -0.004 | 切向 | 接近0表示鏡頭與感測器平行良好 |
-| p2 | -0.001 | 切向 | 接近0表示鏡頭與感測器平行良好 |
+| k1 | -0.524 | 徑向 | 主要畸變項（負值=桶形畸變）|
+| k2 | 3.507 | 徑向 | 二次畸變項 |
+| k3 | -32.89 | 徑向 | 高階畸變項 |
+| p1 | -0.0003 | 切向 | 接近0表示鏡頭安裝良好 |
+| p2 | 0.0015 | 切向 | 接近0表示鏡頭安裝良好 |
 
 **畸變分析**：
 - k1 為負 → 您的鏡頭呈現**桶形畸變**（典型的廣角鏡頭特徵）
 - p1, p2 接近 0 → 切向畸變很小，鏡頭安裝良好
-
-### 5.4 其他參數
-
-| 參數 | 說明 |
-|------|------|
-| checkerboard_size | 棋盤格尺寸 (10, 7) |
-| reprojection_error | 重投影誤差 0.5456 |
 
 ---
 
@@ -307,10 +265,7 @@ mtx, dist = data['mtx'], data['dist']
 img = cv2.imread("distorted_image.png")
 h, w = img.shape[:2]
 
-# 方法1: 直接校正
-undistorted = cv2.undistort(img, mtx, dist, None, mtx)
-
-# 方法2: 使用最優相機矩陣（保留更多像素）
+# 使用最優相機矩陣（保留更多像素）
 newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
 undistorted = cv2.undistort(img, mtx, dist, None, newcameramtx)
 
@@ -323,99 +278,15 @@ undistorted = undistorted[y:y+h, x:x+w]
 
 ```python
 # 預先計算映射表
-mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (w, h), cv2.CV_32FC1)
+mapx, mapy = cv2.initUndistortRectifyMap(
+    mtx, dist, None, newcameramtx, (w, h), cv2.CV_32FC1
+)
 
 # 使用映射表校正（比 undistort 更快）
 undistorted = cv2.remap(img, mapx, mapy, cv2.INTER_LINEAR)
 ```
 
-### 6.3 即時視訊校正
-
-```python
-import cv2
-import numpy as np
-
-# 載入參數
-data = np.load("calibration_data.npz")
-mtx, dist = data['mtx'], data['dist']
-
-# 開啟相機
-cap = cv2.VideoCapture(0)
-ret, frame = cap.read()
-h, w = frame.shape[:2]
-
-# 預計算映射表
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
-mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (w, h), cv2.CV_32FC1)
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    # 即時校正
-    undistorted = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
-    
-    cv2.imshow('Original', frame)
-    cv2.imshow('Undistorted', undistorted)
-    
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
-```
-
-### 6.4 3D 重建與測量
-
-如果需要進行 3D 測量，您可以使用標定參數進行：
-
-```python
-# 已知物體上兩點的像素座標
-point1 = np.array([100, 200])
-point2 = np.array([300, 200])
-
-# 轉換為歸一化座標
-fx, fy = mtx[0, 0], mtx[1, 1]
-cx, cy = mtx[0, 2], mtx[1, 2]
-
-p1_norm = ((point1[0] - cx) / fx, (point1[1] - cy) / fy)
-p2_norm = ((point2[0] - cx) / fx, (point2[1] - cy) / fy)
-
-# 如果知道深度 Z，可以計算實際距離
-Z = 1.0  # 假設深度為 1 米
-X1, Y1 = p1_norm[0] * Z, p1_norm[1] * Z
-X2, Y2 = p2_norm[0] * Z, p2_norm[1] * Z
-distance = np.sqrt((X2-X1)**2 + (Y2-Y1)**2)
-```
-
----
-
-## 7. 總結：您可以帶走的參數
-
-### 必要參數
-
-| 參數 | 用途 | 如何取得 |
-|------|------|---------|
-| **mtx** (內參矩陣) | 校正畸變、3D重建 | `data['mtx']` |
-| **dist** (畸變係數) | 校正畸變 | `data['dist']` |
-
-### 使用範例
-
-```python
-# 最小化使用範例
-import cv2
-import numpy as np
-
-data = np.load("calibration_data.npz")
-mtx, dist = data['mtx'], data['dist']
-
-img = cv2.imread("your_image.png")
-corrected = cv2.undistort(img, mtx, dist)
-cv2.imwrite("corrected.png", corrected)
-```
-
-### 保存為其他格式
+### 6.3 保存為其他格式
 
 ```python
 # 保存為 JSON（便於其他語言讀取）
@@ -438,3 +309,81 @@ fs = cv2.FileStorage('calibration.yaml', cv2.FILE_STORAGE_WRITE)
 fs.write('camera_matrix', data['mtx'])
 fs.write('distortion_coefficients', data['dist'])
 fs.release()
+```
+
+---
+
+## 7. 優化功能說明
+
+### 7.1 每張圖片誤差計算
+
+程式會計算每張圖片的個別重投影誤差：
+
+```python
+def calculate_per_image_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist):
+    for i in range(len(objpoints)):
+        # 投影 3D 點到 2D
+        projected, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
+        # 計算誤差
+        error = cv2.norm(imgpoints[i], projected, cv2.NORM_L2) / len(projected)
+```
+
+### 7.2 自動優化流程
+
+```
+初始狀態: 41 張圖片，誤差 0.8078
+    ↓
+剔除 29.png (誤差 0.2173)
+剔除 37.png (誤差 0.1954)
+...
+    ↓
+經過 24 次迭代
+    ↓
+最終狀態: 18 張圖片，誤差 0.2943 ✓
+```
+
+### 7.3 高誤差圖片的特徵
+
+被剔除的圖片通常有以下問題：
+
+| 問題 | 說明 |
+|------|------|
+| 模糊 | 角點定位不準確 |
+| 角度過大 | 棋盤格過於傾斜 |
+| 光線不均 | 部分角點難以檢測 |
+| 棋盤格變形 | 紙張不夠平整 |
+
+### 7.4 最佳拍攝建議
+
+根據低誤差圖片的分析：
+
+1. **保持適中角度**：棋盤格傾斜 15-45 度
+2. **確保清晰**：避免手震或對焦不準
+3. **均勻光線**：避免強烈反光或陰影
+4. **棋盤格平整**：使用硬質板材固定
+
+---
+
+## 總結
+
+### 標定成果
+
+| 指標 | 值 |
+|------|-----|
+| 重投影誤差 | 0.2943（優秀）|
+| 使用圖片數 | 18/41 |
+| 棋盤格尺寸 | 10×7 內角點 |
+
+### 必要參數
+
+```python
+# 最小化使用範例
+import cv2
+import numpy as np
+
+data = np.load("calibration_data.npz")
+mtx, dist = data['mtx'], data['dist']
+
+img = cv2.imread("your_image.png")
+corrected = cv2.undistort(img, mtx, dist)
+cv2.imwrite("corrected.png", corrected)

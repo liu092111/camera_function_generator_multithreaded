@@ -9,19 +9,31 @@ import cv2
 from config import KF_PROCESS_NOISE, KF_MEASURE_NOISE
 
 
-def unwrap_angles_deg(a_deg):
+def unwrap_angles_deg(a_deg, period=360):
     """
     解包裹角度（度）
     
     Args:
         a_deg: 角度陣列（度）
+        period: 角度週期（預設 360°，對於矩形追蹤使用 180°）
     
     Returns:
         解包裹後的角度陣列
     """
     if len(a_deg) == 0:
         return a_deg
-    return np.rad2deg(np.unwrap(np.deg2rad(a_deg)))
+    
+    a_deg = np.asarray(a_deg, dtype=float)
+    
+    if period == 180:
+        # 對於 [-90, 90] 範圍的角度（矩形追蹤），使用 2θ 技巧
+        # 將角度乘以 2，使週期變成 360°，然後用標準 unwrap，最後除以 2
+        a_2x = a_deg * 2.0
+        a_2x_unwrap = np.rad2deg(np.unwrap(np.deg2rad(a_2x)))
+        return a_2x_unwrap / 2.0
+    else:
+        # 標準 360° unwrap
+        return np.rad2deg(np.unwrap(np.deg2rad(a_deg)))
 
 
 def wrap_angles_deg(a_deg):

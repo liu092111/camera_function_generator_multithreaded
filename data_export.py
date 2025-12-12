@@ -56,11 +56,12 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
         df["y_mm"] = -y_abs
     
     # 角度處理
+    # 因為矩形追蹤的角度範圍是 [-90°, 90°]（180° 週期），需要使用 period=180
     ang_raw = df["angle_deg_raw"].to_numpy()
     mask_ang = np.isfinite(ang_raw)
     ang_unwrap = np.full_like(ang_raw, np.nan, dtype=float)
     if mask_ang.any():
-        ang_unwrap[mask_ang] = unwrap_angles_deg(ang_raw[mask_ang])
+        ang_unwrap[mask_ang] = unwrap_angles_deg(ang_raw[mask_ang], period=180)
         ang_unwrap = moving_average(ang_unwrap, 5)
     df["angle_deg_unwrapped"] = ang_unwrap
     
