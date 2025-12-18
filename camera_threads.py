@@ -10,10 +10,15 @@ import numpy as np
 import cv2
 from config import (
     CAM_HEIGHT, CAM_WIDTH, MODE,
-    MAX_MEAS_JUMP_PX, EMA_ALPHA_POS, EMA_ALPHA_ANGLE
+    MAX_MEAS_JUMP_PX, EMA_ALPHA_POS, EMA_ALPHA_ANGLE,
+    ENABLE_UNDISTORT, FLIP_VERTICAL, FLIP_HORIZONTAL
 )
 from signal_processing import ema
 from image_processing import find_target_and_angle
+
+# 條件導入畸變校正模組
+if ENABLE_UNDISTORT:
+    from undistort import get_undistort_corrector
 
 
 def capture_thread(cap, frame_queue, running, stats):
@@ -93,14 +98,35 @@ def process_thread(frame_queue, result_queue, running, stats, kf, tracker_state,
     # 幀計數
     frame_idx = [0]
     
+    # 追蹤初始化相關
+    tracker_initialized = False  # 是否已成功初始化追蹤
+    consecutive_no_detect = 0    # 連續未檢測到的幀數
+    MAX_NO_DETECT_BEFORE_RESET = 30  # 連續多少幀未檢測到後重置 Kalman
+    INIT_FRAMES = 10             # 初始化階段的幀數（在此期間允許較大跳躍）
+    
+    # 獲取畸變校正器（如果啟用）
+    undistort_corrector = None
+    if ENABLE_UNDISTORT:
+        undistort_corrector = get_undistort_corrector()
+    
     while running[0] or not frame_queue.empty():
         try:
             frame, timestamp = frame_queue.get(timeout=0.1)
         except queue.Empty:
             continue
         
+        # 畸變校正（在旋轉之前進行）
+        if undistort_corrector is not None:
+            frame = undistort_corrector.undistort(frame)
+        
         # 旋轉畫面
         frame_rotated = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        
+        # 應用翻轉（修正 device 移動方向與影像顯示方向）
+        if FLIP_VERTICAL:
+            frame_rotated = cv2.flip(frame_rotated, 0)  # 0 = 垂直翻轉（上下翻轉）
+        if FLIP_HORIZONTAL:
+            frame_rotated = cv2.flip(frame_rotated, 1)  # 1 = 水平翻轉（左右翻轉）
         
         # Kalman 預測
         pred = kf.predict()
@@ -112,10 +138,29 @@ def process_thread(frame_queue, result_queue, running, stats, kf, tracker_state,
         if m is not None:
             cx, cy, angle_deg, box = m
             dist = np.hypot(cx - px_pred, cy - py_pred)
-            if dist > MAX_MEAS_JUMP_PX:
-                use_meas = False
+            
+            # 在初始化階段或追蹤尚未建立時，允許較大的跳躍距離
+            # 這樣可以讓 device 在任意初始位置都能被檢測到
+            if not tracker_initialized or frame_idx[0] < INIT_FRAMES:
+                # 初始化階段：直接接受測量，並重置 Kalman 狀態
+                kf.statePost = np.array([[cx], [cy], [0.0], [0.0]], dtype=np.float32)
+                tracker_initialized = True
+                consecutive_no_detect = 0
+            elif dist > MAX_MEAS_JUMP_PX:
+                # 跳躍距離過大，可能是誤檢測或 device 快速移動
+                # 檢查是否連續多幀未檢測到，如果是則重置 Kalman
+                if consecutive_no_detect >= MAX_NO_DETECT_BEFORE_RESET:
+                    # 重置 Kalman 到新的測量位置
+                    kf.statePost = np.array([[cx], [cy], [0.0], [0.0]], dtype=np.float32)
+                    consecutive_no_detect = 0
+                    print(f"[Process] Kalman 重置到新位置: ({cx:.1f}, {cy:.1f})")
+                else:
+                    use_meas = False
+            else:
+                consecutive_no_detect = 0
         else:
             use_meas = False
+            consecutive_no_detect += 1
         
         if use_meas:
             est = kf.correct(np.array([[cx], [cy]], dtype=np.float32))

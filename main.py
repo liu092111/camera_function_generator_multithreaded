@@ -21,7 +21,7 @@ import numpy as np
 from config import (
     MODE, CAMERA_INDEX, CAM_WIDTH, CAM_HEIGHT, CAM_FPS_REQ,
     RECORD_OUTPUT, WINDOW_TITLE, FRAME_QUEUE_SIZE, RESULT_QUEUE_SIZE,
-    VOLTAGE
+    VOLTAGE, ENABLE_UNDISTORT
 )
 from stats import Stats
 from function_generator import FunctionGeneratorController
@@ -80,12 +80,28 @@ def main():
     print(f"  解析度: {actual_width}x{actual_height}")
     print(f"  目標 FPS: {actual_fps:.1f}")
     
+    # 初始化畸變校正（如果啟用）
+    undistort_enabled = False
+    if ENABLE_UNDISTORT:
+        print("\n初始化鏡頭畸變校正...")
+        from undistort import init_undistort, undistort_frame
+        if init_undistort():
+            undistort_enabled = True
+        else:
+            print("⚠ 畸變校正初始化失敗，將使用原始影像")
+    else:
+        print("\n鏡頭畸變校正：已停用")
+    
     # 估算 mm/px - 使用網格或 device 尺寸校準
     ok, first = cap.read()
     if not ok:
         print("無法讀取影像")
         cap.release()
         return
+    
+    # 對第一幀應用畸變校正（如果啟用）
+    if undistort_enabled:
+        first = undistort_frame(first)
     
     print("\n正在校準尺度 (mm/pixel)...")
     mm_per_px = calibrate_scale(first)
@@ -134,6 +150,7 @@ def main():
     show_help()
     print(f"\n系統狀態：")
     print(f"✓ 攝影機：已連接 ({actual_width}x{actual_height} @ {actual_fps:.0f} FPS)")
+    print(f"{'✓' if undistort_enabled else '✗'} 畸變校正：{'已啟用' if undistort_enabled else '已停用'}")
     print(f"{'✓' if fg_connected else '✗'} 函數產生器：{'已連接' if fg_connected else '未連接'}")
     print(f"\n系統就緒！按 [H] 查看幫助\n")
     

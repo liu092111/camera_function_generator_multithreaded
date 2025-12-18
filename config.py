@@ -16,6 +16,15 @@ RECORD_OUTPUT = True
 WINDOW_TITLE = "Camera & Function Generator Control"
 DISPLAY_SCALE = 0.6  # 顯示視窗縮放比例（60%）
 
+# ========== 鏡頭畸變校正設定 ==========
+ENABLE_UNDISTORT = True  # 是否啟用畸變校正
+CALIBRATION_DATA_PATH = "calibration/tps_rectification_map.npz"  # 校正數據路徑
+UNDISTORT_CROP = False  # 校正後是否裁剪黑邊（False 保留完整視野）
+
+# ========== 影像方向設定 ==========
+FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動方向與影像顯示方向相反的問題
+FLIP_HORIZONTAL = False  # 水平翻轉（左右翻轉）
+
 # 統一電壓設定（V)
 VOLTAGE = 1.2
 
