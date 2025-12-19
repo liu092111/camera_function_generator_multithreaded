@@ -74,6 +74,7 @@ class UndistortCorrector:
     def _load_tps_calibration(self, data):
         """
         載入 TPS 校正映射表
+        支援裁切版 (map_x_cropped) 和完整版 (map_x)
         
         Args:
             data: npz 數據
@@ -81,29 +82,45 @@ class UndistortCorrector:
         Returns:
             bool: 是否成功載入
         """
-        self.map1 = data['map_x'].astype(np.float32)
-        self.map2 = data['map_y'].astype(np.float32)
         self.use_tps = True
+        self.use_cropped = False  # 預設使用裁切版
+        self.valid_region = None  # 有效區域偏移
         
-        # 載入 ROI 資訊（如果有）
+        # 優先使用裁切版（推薦，無黑邊）
+        if 'map_x_cropped' in data and 'map_y_cropped' in data:
+            self.map1 = data['map_x_cropped'].astype(np.float32)
+            self.map2 = data['map_y_cropped'].astype(np.float32)
+            self.use_cropped = True
+            
+            # 載入有效區域資訊（用於座標轉換）
+            if 'valid_region' in data:
+                self.valid_region = tuple(data['valid_region'])  # [x0, y0, w, h]
+        else:
+            # 退回到完整版
+            self.map1 = data['map_x'].astype(np.float32)
+            self.map2 = data['map_y'].astype(np.float32)
+        
+        # 載入原始 ROI 資訊
         if 'roi' in data:
             self.roi = tuple(data['roi'])
         else:
             self.roi = (0, 0, self.map1.shape[1], self.map1.shape[0])
         
-        # 載入輸出尺寸（如果有）
+        # 輸出尺寸
         if 'out_size' in data:
-            self.out_size = tuple(data['out_size'])
+            self.out_size = tuple(data['out_size'])  # 完整版尺寸
         else:
             self.out_size = (self.map1.shape[1], self.map1.shape[0])
         
-        self.img_size = self.out_size
+        # 實際輸出尺寸（根據是否裁切）
+        self.img_size = (self.map1.shape[1], self.map1.shape[0])
         self.is_initialized = True
         
         print(f"✓ 已載入 TPS 校正映射表: {self.calibration_path}")
-        print(f"  映射表尺寸: {self.map1.shape[1]}x{self.map1.shape[0]}")
-        print(f"  ROI: x={self.roi[0]}, y={self.roi[1]}, w={self.roi[2]}, h={self.roi[3]}")
-        print(f"  輸出尺寸: {self.out_size[0]}x{self.out_size[1]}")
+        print(f"  模式: {'裁切版（推薦）' if self.use_cropped else '完整版'}")
+        print(f"  輸出尺寸: {self.img_size[0]}x{self.img_size[1]}")
+        if self.valid_region:
+            print(f"  有效區域偏移: x={self.valid_region[0]}, y={self.valid_region[1]}")
         
         return True
     

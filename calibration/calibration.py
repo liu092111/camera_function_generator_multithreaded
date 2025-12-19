@@ -1,18 +1,22 @@
+"""
+網格校正程式 - TPS 薄板樣條變換
+自動偵測網格交點並校正為水平垂直的正方格
+"""
 import cv2
 import numpy as np
 from scipy.interpolate import Rbf
+import os
 
 # =========================
 # 0) 讀圖 & ROI 設定
 # =========================
-IMG_PATH = "original.png"  # <-- 改成你的檔名
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+IMG_PATH = os.path.join(SCRIPT_DIR, "original.png")
 img = cv2.imread(IMG_PATH)
 if img is None:
     raise FileNotFoundError(f"Cannot read {IMG_PATH}")
 
-# ROI: (x, y, w, h) 你可以先用整張，或只切你實驗區
-# 建議你先用「實驗會用的那塊」：效果更穩、更快
-ROI = None  # 例如 ROI=(60, 40, 1050, 760)
+ROI = None  # 可設定 ROI=(x, y, w, h)，None 表示整張影像
 
 if ROI is None:
     x0, y0, w0, h0 = 0, 0, img.shape[1], img.shape[0]
@@ -20,57 +24,55 @@ else:
     x0, y0, w0, h0 = ROI
 
 roi = img[y0:y0+h0, x0:x0+w0].copy()
-
-# 你希望輸出的校正ROI大小（可等於ROI大小）
 OUT_W, OUT_H = roi.shape[1], roi.shape[0]
 
 # =========================
-# 1) 偵測網格交點（控制點）
-#    策略：二值化 -> 取交點（水平線與垂直線的交會）
+# 1) 交點偵測 - 亞像素精度
 # =========================
 gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+gray_blur = cv2.GaussianBlur(gray, (3, 3), 0)
 
-# 對你這種黑底白線網格，通常用 adaptive threshold + 反相會比較好
 bin_img = cv2.adaptiveThreshold(
-    gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 31, -5
+    gray_blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 31, -5
 )
 
-# 讓線變白、背景變黑（依你的影像可能要反相；若效果不對就切換）
-# bin_img = 255 - bin_img
-
-# 用形態學分離水平線/垂直線
-h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (35, 1))  # 可調
-v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 35))  # 可調
+# 形態學分離水平線/垂直線
+h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 40))
 
 h_lines = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, h_kernel, iterations=1)
 v_lines = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, v_kernel, iterations=1)
 
-# 交點 = 水平線 & 垂直線 同時為線的位置
+# 增加線寬以獲得更好的交點
+h_lines = cv2.dilate(h_lines, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3)), 1)
+v_lines = cv2.dilate(v_lines, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1)), 1)
+
 intersections = cv2.bitwise_and(h_lines, v_lines)
 
-# 把交點變得更像「點」
-dot_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-intersections = cv2.dilate(intersections, dot_kernel, iterations=1)
-
-# 找交點的連通元件中心
+# 找交點連通元件
 num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(intersections)
 
 pts = []
 for i in range(1, num_labels):
     area = stats[i, cv2.CC_STAT_AREA]
-    # 面積過小多半是雜訊，過大可能是模糊連成塊（可調）
-    if 5 <= area <= 500:
+    if 3 <= area <= 800:
         cx, cy = centroids[i]
         pts.append([cx, cy])
 
 pts = np.array(pts, dtype=np.float32)
 
+# 亞像素精度優化
+if len(pts) > 0:
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01)
+    pts = cv2.cornerSubPix(gray, pts, (5, 5), (-1, -1), criteria)
+
+print(f"[INFO] 偵測到 {len(pts)} 個交點（亞像素精度）")
+
 if len(pts) < 30:
-    print(f"[WARN] 交點太少：{len(pts)}，你可能需要調 kernel 或反相 bin_img。")
+    print(f"[WARN] 交點太少：{len(pts)}")
 
 # =========================
-# 2) 把交點排序成「網格」(行列結構)
-#    做法：先依 y 分群成多列，再每列依 x 排序
+# 2) 網格排序
 # =========================
 def cluster_1d(vals, tol):
     """把 1D 數值分群：相近的歸一群"""
@@ -87,68 +89,64 @@ def cluster_1d(vals, tol):
     groups.append(cur)
     return groups
 
-# 估計格距（用 y 差的中位數）
-# 先粗略依 y 排序，算相鄰差的中位數當作 tol 的參考
+# 估計格距
 ys = np.sort(pts[:, 1])
 dy = np.diff(ys)
-dy = dy[(dy > 1) & (dy < 80)]  # 篩掉極端值（可調）
-if len(dy) == 0:
-    raise RuntimeError("無法估計格距，請調整前處理/ROI。")
-step_y = np.median(dy)
+dy = dy[(dy > 2) & (dy < 60)]
+step_y = np.median(dy) if len(dy) > 0 else 20
 
-tol_y = max(6.0, step_y * 0.45)  # 可調：越大越容易合併成同一列
+xs = np.sort(pts[:, 0])
+dx = np.diff(xs)
+dx = dx[(dx > 2) & (dx < 60)]
+step_x = np.median(dx) if len(dx) > 0 else 20
+
+print(f"[INFO] 估計格距: step_x={step_x:.2f}, step_y={step_y:.2f}")
+
+# Y 方向分群
+tol_y = max(5.0, step_y * 0.4)
 y_groups = cluster_1d(pts[:, 1], tol=tol_y)
 
-# 每一列取 y 平均，列內依 x 排序
+# 建立列
 rows = []
 for g in y_groups:
     row_pts = pts[g]
     row_pts = row_pts[np.argsort(row_pts[:, 0])]
     rows.append(row_pts)
 
-# 列依 y 由上到下排序
 rows = sorted(rows, key=lambda r: np.mean(r[:, 1]))
 
-# 讓每一列取「共同的欄數」：用眾數/中位數（避免某些列缺點）
+# 統計各列的點數
 row_lens = np.array([len(r) for r in rows])
 target_cols = int(np.median(row_lens))
 
 # 過濾太短的列
-rows2 = [r for r in rows if len(r) >= max(5, int(target_cols * 0.7))]
+rows2 = [r for r in rows if len(r) >= max(6, int(target_cols * 0.8))]
+if len(rows2) < 5:
+    rows2 = [r for r in rows if len(r) >= max(4, int(target_cols * 0.6))]
 target_cols = int(np.median([len(r) for r in rows2]))
 
-# 每列裁切成同樣欄數（取中間段，避免邊緣偵測不穩）
+# 每列裁切成同樣欄數
 grid = []
 for r in rows2:
     if len(r) > target_cols:
         start = (len(r) - target_cols) // 2
         r = r[start:start + target_cols]
+    elif len(r) < target_cols:
+        continue
     grid.append(r)
 
-grid = np.stack(grid, axis=0)  # (R, C, 2)
+grid = np.stack(grid, axis=0)
 R, C = grid.shape[0], grid.shape[1]
-print(f"[INFO] grid size detected: R={R}, C={C}, points={R*C}")
-
-if R < 6 or C < 6:
-    print("[WARN] 網格列/欄太少，非線性校正可能不夠穩。建議放大ROI或調偵測參數。")
+print(f"[INFO] grid size: R={R}, C={C}, total points={R*C}")
 
 # =========================
-# 3) 建立「理想正方格」目標點（dest）
-#    你可以指定每格像素距離（用平均格距估）
+# 3) 建立「理想正方格」目標點
 # =========================
-# 估計平均格距（x方向）
-xs_sorted = np.sort(grid.reshape(-1, 2)[:, 0])
-dx = np.diff(xs_sorted)
-dx = dx[(dx > 1) & (dx < 80)]
-step_x = np.median(dx) if len(dx) else step_y
 step = float(np.mean([step_x, step_y]))
 
-# 目標點：置中排版，保持格距一致
-margin = 20
 dest_w = OUT_W
 dest_h = OUT_H
 
-# 讓理想格網鋪在輸出ROI中（以 step 決定密度）
 grid_w = (C - 1) * step
 grid_h = (R - 1) * step
 off_x = (dest_w - grid_w) / 2.0
@@ -160,49 +158,114 @@ for i in range(R):
         dest[i, j, 0] = off_x + j * step
         dest[i, j, 1] = off_y + i * step
 
-src_pts = grid.reshape(-1, 2)         # 原圖交點 (x,y)
-dst_pts = dest.reshape(-1, 2)         # 理想交點 (X,Y)
+src_pts = grid.reshape(-1, 2)
+dst_pts = dest.reshape(-1, 2)
 
 # =========================
-# 4) TPS：建立「目標 -> 原圖」的逆映射
-#    用 Rbf(thin_plate) 擬合 (X,Y)->x 與 (X,Y)->y
+# 4) 增加邊界錨點
 # =========================
-X = dst_pts[:, 0]
-Y = dst_pts[:, 1]
-x = src_pts[:, 0]
-y = src_pts[:, 1]
+margin = 10
+edge_pts_src = []
+edge_pts_dst = []
 
-rbf_x = Rbf(X, Y, x, function="thin_plate")
-rbf_y = Rbf(X, Y, y, function="thin_plate")
+corners = [
+    (margin, margin),
+    (OUT_W - margin, margin),
+    (margin, OUT_H - margin),
+    (OUT_W - margin, OUT_H - margin)
+]
+for cx, cy in corners:
+    edge_pts_dst.append([cx, cy])
+    edge_pts_src.append([cx, cy])
 
-# 生成 remap 表
+num_edge = 5
+for i in range(num_edge):
+    t = (i + 1) / (num_edge + 1)
+    edge_pts_dst.append([margin + t * (OUT_W - 2*margin), margin])
+    edge_pts_src.append([margin + t * (OUT_W - 2*margin), margin])
+    edge_pts_dst.append([margin + t * (OUT_W - 2*margin), OUT_H - margin])
+    edge_pts_src.append([margin + t * (OUT_W - 2*margin), OUT_H - margin])
+    edge_pts_dst.append([margin, margin + t * (OUT_H - 2*margin)])
+    edge_pts_src.append([margin, margin + t * (OUT_H - 2*margin)])
+    edge_pts_dst.append([OUT_W - margin, margin + t * (OUT_H - 2*margin)])
+    edge_pts_src.append([OUT_W - margin, margin + t * (OUT_H - 2*margin)])
+
+edge_pts_src = np.array(edge_pts_src, dtype=np.float32)
+edge_pts_dst = np.array(edge_pts_dst, dtype=np.float32)
+
+all_src = np.vstack([src_pts, edge_pts_src])
+all_dst = np.vstack([dst_pts, edge_pts_dst])
+
+print(f"[INFO] 總控制點數: {len(all_src)}")
+
+# =========================
+# 5) TPS 建立逆映射
+# =========================
+X = all_dst[:, 0]
+Y = all_dst[:, 1]
+x = all_src[:, 0]
+y = all_src[:, 1]
+
+SMOOTH = 1.0
+print(f"[INFO] 使用 TPS smooth={SMOOTH}...")
+
+rbf_x = Rbf(X, Y, x, function="thin_plate", smooth=SMOOTH)
+rbf_y = Rbf(X, Y, y, function="thin_plate", smooth=SMOOTH)
+
 grid_X, grid_Y = np.meshgrid(np.arange(dest_w, dtype=np.float32),
                              np.arange(dest_h, dtype=np.float32))
 map_x = rbf_x(grid_X, grid_Y).astype(np.float32)
 map_y = rbf_y(grid_X, grid_Y).astype(np.float32)
 
-# remap：把「理想影像」每個像素去原圖找對應位置取樣
 rectified = cv2.remap(roi, map_x, map_y, interpolation=cv2.INTER_LINEAR,
-                      borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
+                      borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
 
 # =========================
-# 5) Debug輸出：看控制點落點是否合理
+# 6) 計算有效區域並裁切
 # =========================
 dbg = roi.copy()
 for (px, py) in src_pts.astype(int):
     cv2.circle(dbg, (px, py), 2, (0, 255, 0), -1)
 
-cv2.imwrite("debug_points.png", dbg)
-cv2.imwrite("rectified_tps.png", rectified)
-print("[OK] Saved debug_points.png")
-print("[OK] Saved rectified_tps.png")
+cv2.imwrite(os.path.join(SCRIPT_DIR, "debug_points.png"), dbg)
+
+# 計算有效區域
+grid_min_x = np.min(dst_pts[:, 0])
+grid_max_x = np.max(dst_pts[:, 0])
+grid_min_y = np.min(dst_pts[:, 1])
+grid_max_y = np.max(dst_pts[:, 1])
+
+crop_margin = 5
+valid_x0 = int(np.ceil(grid_min_x)) + crop_margin
+valid_y0 = int(np.ceil(grid_min_y)) + crop_margin
+valid_x1 = int(np.floor(grid_max_x)) - crop_margin
+valid_y1 = int(np.floor(grid_max_y)) - crop_margin
+
+valid_w = valid_x1 - valid_x0
+valid_h = valid_y1 - valid_y0
+
+print(f"[INFO] 有效區域: ({valid_x0}, {valid_y0}), size={valid_w}x{valid_h}")
+
+# 裁切
+rectified_cropped = rectified[valid_y0:valid_y1, valid_x0:valid_x1].copy()
+map_x_cropped = map_x[valid_y0:valid_y1, valid_x0:valid_x1].copy()
+map_y_cropped = map_y[valid_y0:valid_y1, valid_x0:valid_x1].copy()
+
+# 保存結果
+cv2.imwrite(os.path.join(SCRIPT_DIR, "rectified.png"), rectified_cropped)
 
 np.savez(
-    "tps_rectification_map.npz",
+    os.path.join(SCRIPT_DIR, "tps_rectification_map.npz"),
     map_x=map_x,
     map_y=map_y,
+    map_x_cropped=map_x_cropped,
+    map_y_cropped=map_y_cropped,
     roi=np.array([x0, y0, w0, h0]),
-    out_size=np.array([OUT_W, OUT_H])
+    out_size=np.array([OUT_W, OUT_H]),
+    valid_region=np.array([valid_x0, valid_y0, valid_w, valid_h]),
+    crop_margin=crop_margin
 )
 
+print("[OK] Saved debug_points.png")
+print("[OK] Saved rectified.png")
 print("[OK] Saved tps_rectification_map.npz")
