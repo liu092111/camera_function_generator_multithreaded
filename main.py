@@ -10,8 +10,17 @@
 作者：模組化優化版本
 """
 
+# 抑制警告訊息
+import warnings
+warnings.filterwarnings('ignore')
+
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 抑制 TensorFlow 訊息
+os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'  # 抑制 OpenCV 訊息
+
 import cv2
+# 抑制 OpenCV C++ 層級的警告
+cv2.setLogLevel(0)  # 0 = LOG_LEVEL_SILENT
 import time
 import threading
 import queue
@@ -182,18 +191,44 @@ def main():
                         out_path = os.path.join(output_dir, f"camera_{MODE}_tracked.avi")
                         out_path_raw = os.path.join(output_dir, f"camera_{MODE}_raw.avi")
                         
-                        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                        writer = cv2.VideoWriter(out_path, fourcc, actual_fps, (CAM_HEIGHT, CAM_WIDTH))
-                        writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, (CAM_HEIGHT, CAM_WIDTH))
+                        # 從實際 frame 獲取尺寸（避免 undistort 造成尺寸不匹配）
+                        frame_height, frame_width = frame.shape[:2]
+                        frame_size = (frame_width, frame_height)
+                        
+                        # 使用 XVID codec（不依賴 FFmpeg，支援高 FPS）
+                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                        writer = cv2.VideoWriter(out_path, fourcc, actual_fps, frame_size)
+                        writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, frame_size)
+                        
+                        # 檢查 writer 是否成功開啟
+                        if not writer.isOpened():
+                            print("警告: XVID codec 不可用，嘗試 MJPG...")
+                            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                            writer = cv2.VideoWriter(out_path, fourcc, actual_fps, frame_size)
+                            writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, frame_size)
+                        
+                        # 保存 frame_size 以便後續檢查
+                        tracker_state['frame_size'] = frame_size
                         tracker_state['actual_fps'] = actual_fps  # 儲存用於 GIF
-                        print(f"開始錄影: {out_path} (FPS: {actual_fps:.1f})")
+                        print(f"開始錄影: {out_path} (FPS: {actual_fps:.1f}, Size: {frame_width}x{frame_height})")
                         print(f"原始影片: {out_path_raw}")
                     
-                    writer.write(frame)
+                    # 確保 frame 有效且尺寸正確後才寫入
+                    if frame is not None and frame.size > 0:
+                        expected_size = tracker_state.get('frame_size')
+                        current_size = (frame.shape[1], frame.shape[0])
+                        if expected_size and current_size == expected_size:
+                            writer.write(frame)
+                        # 尺寸不匹配時跳過，不寫入
                     
                     # 寫入原始影片（無標註）
-                    if 'raw_frame' in data:
-                        writer_raw.write(data['raw_frame'])
+                    if 'raw_frame' in data and data['raw_frame'] is not None:
+                        raw_frame = data['raw_frame']
+                        if raw_frame.size > 0:
+                            expected_size = tracker_state.get('frame_size')
+                            current_size = (raw_frame.shape[1], raw_frame.shape[0])
+                            if expected_size and current_size == expected_size:
+                                writer_raw.write(raw_frame)
                     
                     # 記錄資料（包含 box）
                     rec_data.append((

@@ -7,7 +7,7 @@
 import numpy as np
 
 # ========== 攝影機設定 ==========
-MODE = "straight"  # "straight" 或 "rotation"
+MODE = "rotation"  # "straight" 或 "rotation"
 CAMERA_INDEX = 1
 CAM_WIDTH = 640    # 攝影機解析度寬度
 CAM_HEIGHT = 480   # 攝影機解析度高度
@@ -26,7 +26,7 @@ FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動
 FLIP_HORIZONTAL = False  # 水平翻轉（左右翻轉）
 
 # 統一電壓設定（V)
-VOLTAGE = 1.2
+VOLTAGE = 1.3
 
 # ========== 多執行緒設定 ==========
 FRAME_QUEUE_SIZE = 120   # 幀佇列大小（可緩存 1 秒的幀）

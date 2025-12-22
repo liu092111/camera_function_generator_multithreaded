@@ -26,6 +26,9 @@ else:
 roi = img[y0:y0+h0, x0:x0+w0].copy()
 OUT_W, OUT_H = roi.shape[1], roi.shape[0]
 
+# 保存原始圖像副本（用於最終輸出比較）
+original_roi = roi.copy()
+
 # =========================
 # 1) 交點偵測 - 亞像素精度
 # =========================
@@ -206,7 +209,9 @@ Y = all_dst[:, 1]
 x = all_src[:, 0]
 y = all_src[:, 1]
 
-SMOOTH = 1.0
+# TPS smooth 參數：較小的值 = 更精確但可能過擬合，較大的值 = 更平滑但可能欠擬合
+# 對於精確的網格校正，使用較小的 smooth 值
+SMOOTH = 0.1
 print(f"[INFO] 使用 TPS smooth={SMOOTH}...")
 
 rbf_x = Rbf(X, Y, x, function="thin_plate", smooth=SMOOTH)
@@ -266,6 +271,40 @@ np.savez(
     crop_margin=crop_margin
 )
 
+# =========================
+# 7) 生成驗證比較圖
+# =========================
+# 在原圖上繪製偵測到的網格點
+original_with_pts = original_roi.copy()
+for (px, py) in src_pts.astype(int):
+    cv2.circle(original_with_pts, (px, py), 3, (0, 255, 0), -1)
+
+# 在校正圖上繪製目標網格點位置
+rectified_with_grid = rectified_cropped.copy()
+# 計算裁切後的目標點座標
+cropped_dst_pts = dst_pts.copy()
+cropped_dst_pts[:, 0] -= valid_x0
+cropped_dst_pts[:, 1] -= valid_y0
+
+for (px, py) in cropped_dst_pts.astype(int):
+    if 0 <= px < valid_w and 0 <= py < valid_h:
+        cv2.circle(rectified_with_grid, (px, py), 3, (0, 0, 255), -1)
+
+# 保存帶標記的圖像
+cv2.imwrite(os.path.join(SCRIPT_DIR, "original_with_points.png"), original_with_pts)
+cv2.imwrite(os.path.join(SCRIPT_DIR, "rectified_with_grid.png"), rectified_with_grid)
+
 print("[OK] Saved debug_points.png")
 print("[OK] Saved rectified.png")
+print("[OK] Saved original_with_points.png")
+print("[OK] Saved rectified_with_grid.png")
 print("[OK] Saved tps_rectification_map.npz")
+
+# =========================
+# 8) 顯示校正統計
+# =========================
+print("\n===== 校正統計 =====")
+print(f"原始影像尺寸: {OUT_W} x {OUT_H}")
+print(f"校正後影像尺寸: {valid_w} x {valid_h}")
+print(f"網格尺寸: {R} 行 x {C} 列")
+print(f"平均格距: {step:.2f} px")

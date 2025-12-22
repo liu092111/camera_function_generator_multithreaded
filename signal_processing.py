@@ -36,6 +36,48 @@ def unwrap_angles_deg(a_deg, period=360):
         return np.rad2deg(np.unwrap(np.deg2rad(a_deg)))
 
 
+def unwrap_angles_continuous(a_deg, period=180):
+    """
+    連續解包裹角度，確保角度持續累積而不會跳躍
+    適用於 rotation mode 的連續旋轉追蹤
+    
+    Args:
+        a_deg: 角度陣列（度）
+        period: 角度週期（預設 180° 對應 cv2.minAreaRect 輸出範圍 [-90, 90]）
+    
+    Returns:
+        連續解包裹後的角度陣列（可超出 ±360°）
+    """
+    if len(a_deg) == 0:
+        return a_deg
+    
+    a_deg = np.asarray(a_deg, dtype=float)
+    result = np.zeros_like(a_deg)
+    result[0] = a_deg[0]
+    
+    half_period = period / 2.0
+    
+    for i in range(1, len(a_deg)):
+        if not np.isfinite(a_deg[i]) or not np.isfinite(result[i-1]):
+            result[i] = a_deg[i] if np.isfinite(a_deg[i]) else result[i-1]
+            continue
+        
+        # 計算當前角度與前一個解包裹角度的差異
+        # 將前一個結果映射回 [-half_period, half_period] 範圍來比較
+        prev_wrapped = ((result[i-1] + half_period) % period) - half_period
+        diff = a_deg[i] - prev_wrapped
+        
+        # 如果差異超過半個週期，則需要調整
+        while diff > half_period:
+            diff -= period
+        while diff < -half_period:
+            diff += period
+        
+        result[i] = result[i-1] + diff
+    
+    return result
+
+
 def wrap_angles_deg(a_deg):
     """
     包裹角度到 [-90, 90] 範圍（度）

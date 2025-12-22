@@ -6,15 +6,17 @@ import csv
 import time
 
 def load_waveform_with_time(filename):
-    """讀取波形文件並返回時間和數值數據"""
+    """讀取波形文件並返回時間和數值數據（支援 CSV 格式）"""
     times = []
     values = []
     
     with open(filename, 'r') as f:
-        reader = csv.reader(f, delimiter=' ')
-        for t, p in reader:
-            times.append(float(t))
-            values.append(float(p))
+        reader = csv.reader(f, delimiter=',')
+        # 跳過標題行
+        next(reader)
+        for row in reader:
+            times.append(float(row[0]))
+            values.append(float(row[1]))
     
     return np.array(times), np.array(values)
 
@@ -70,23 +72,23 @@ def run_mode(inst, mode_num):
     
     # 根據模式選擇波形檔案和極性設定
     if mode_num == 1:
-        file1 = 'modal/25k_50k_84p88deg_2000pts.dat'
-        file2 = 'modal/25k_50k_264p88deg_2000pts.dat'
+        file1 = 'modal/ONEPERIOD_A_25k_50k_84p88deg_2000pts.csv'
+        file2 = 'modal/ONEPERIOD_B_25k_50k_264p88deg_2000pts.csv'
         ch1_polarity = 'NORM'
         ch2_polarity = 'INV'
     elif mode_num == 2:
-        file1 = 'modal/47k_94k_57p32deg_2000pts.dat'
-        file2 = 'modal/47k_94k_237p32deg_2000pts.dat'
+        file1 = 'modal/ONEPERIOD_C_47k_94k_57p32deg_2000pts.csv'
+        file2 = 'modal/ONEPERIOD_D_47k_94k_237p32deg_2000pts.csv'
         ch1_polarity = 'NORM'
         ch2_polarity = 'INV'
     elif mode_num == 3:
-        file1 = 'modal/25k_50k_84p88deg_2000pts.dat'
-        file2 = 'modal/25k_50k_264p88deg_2000pts.dat'
+        file1 = 'modal/ONEPERIOD_A_25k_50k_84p88deg_2000pts.csv'
+        file2 = 'modal/ONEPERIOD_B_25k_50k_264p88deg_2000pts.csv'
         ch1_polarity = 'INV'
         ch2_polarity = 'NORM'
     else:  # mode_num == 4
-        file1 = 'modal/47k_94k_57p32deg_2000pts.dat'
-        file2 = 'modal/47k_94k_237p32deg_2000pts.dat'
+        file1 = 'modal/ONEPERIOD_C_47k_94k_57p32deg_2000pts.csv'
+        file2 = 'modal/ONEPERIOD_D_47k_94k_237p32deg_2000pts.csv'
         ch1_polarity = 'INV'
         ch2_polarity = 'NORM'
     

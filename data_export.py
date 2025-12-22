@@ -13,7 +13,7 @@ from config import (
     MODE, INVERT_Y_AXIS, ORIENT_PLOT_WRAPPED, 
     ORIENT_YLIM_DEG, PLOT_RANGE_SCALE
 )
-from signal_processing import unwrap_angles_deg, wrap_angles_deg, moving_average, finite_diff
+from signal_processing import unwrap_angles_deg, unwrap_angles_continuous, wrap_angles_deg, moving_average, finite_diff
 
 
 def process_and_export_data(rec_data, output_dir, mm_per_px):
@@ -55,18 +55,37 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
         df["x_mm"] = x_abs
         df["y_mm"] = -y_abs
     
+    # 速度計算
+    t = df["t_s"].to_numpy()
+    
     # 角度處理
-    # 因為矩形追蹤的角度範圍是 [-90°, 90°]（180° 週期），需要使用 period=180
+    # 因為矩形追蹤的角度範圍是 [-90°, 90°]（180° 週期）
     ang_raw = df["angle_deg_raw"].to_numpy()
     mask_ang = np.isfinite(ang_raw)
     ang_unwrap = np.full_like(ang_raw, np.nan, dtype=float)
     if mask_ang.any():
-        ang_unwrap[mask_ang] = unwrap_angles_deg(ang_raw[mask_ang], period=180)
+        if MODE.lower() == "rotation":
+            # rotation mode 使用連續解包裹，確保角度可以持續累積超過 ±360°
+            ang_unwrap[mask_ang] = unwrap_angles_continuous(ang_raw[mask_ang], period=180)
+            # 偵測並移除角度跳躍（由於追蹤失敗導致的不合理變化）
+            # 計算角度變化率，過濾掉變化太快的點
+            valid_idx = np.where(mask_ang)[0]
+            if len(valid_idx) > 1:
+                for i in range(1, len(valid_idx)):
+                    curr_idx = valid_idx[i]
+                    prev_idx = valid_idx[i-1]
+                    dt = t[curr_idx] - t[prev_idx] if t[curr_idx] > t[prev_idx] else 0.01
+                    dtheta = abs(ang_unwrap[curr_idx] - ang_unwrap[prev_idx])
+                    # 如果角度變化率超過 500 deg/s，可能是追蹤失敗
+                    if dt > 0 and dtheta / dt > 500:
+                        ang_unwrap[curr_idx] = np.nan
+        else:
+            # straight mode 使用標準解包裹
+            ang_unwrap[mask_ang] = unwrap_angles_deg(ang_raw[mask_ang], period=180)
         ang_unwrap = moving_average(ang_unwrap, 5)
     df["angle_deg_unwrapped"] = ang_unwrap
     
-    # 速度計算
-    t = df["t_s"].to_numpy()
+    # 位移速度計算
     vx = finite_diff(df["x_mm"].to_numpy(), t, smooth_win=5)
     vy = finite_diff(df["y_mm"].to_numpy(), t, smooth_win=5)
     speed = np.sqrt(vx**2 + vy**2)
@@ -82,6 +101,17 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
             dt = t[i1] - t[i0]
             if dt > 0:
                 ang_vel[i1] = (ang_unwrap[i1] - ang_unwrap[i0]) / dt
+        # 移除異常值（角速度跳躍太大的點）
+        if MODE.lower() == "rotation":
+            # 計算角速度的中位數和標準差，過濾掉異常值
+            valid_ang_vel = ang_vel[np.isfinite(ang_vel)]
+            if len(valid_ang_vel) > 10:
+                median_vel = np.median(valid_ang_vel)
+                std_vel = np.std(valid_ang_vel)
+                # 過濾掉超過中位數 ± 5倍標準差的值
+                threshold = max(5 * std_vel, 100)  # 至少 100 deg/s 的閾值
+                outlier_mask = np.abs(ang_vel - median_vel) > threshold
+                ang_vel[outlier_mask] = np.nan
         ang_vel = moving_average(ang_vel, 5)
     df["angular_vel_dps"] = ang_vel
     
@@ -113,6 +143,8 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
     if MODE.lower() == "straight":
         print(f"  - Speed/Orientation 圖: {os.path.basename(plot_paths['speed_orientation'])}")
     else:
+        if 'angle' in plot_paths:
+            print(f"  - Angle 圖: {os.path.basename(plot_paths['angle'])}")
         print(f"  - Angular Speed 圖: {os.path.basename(plot_paths['angular_speed'])}")
     if 'trajectory_contour' in plot_paths:
         print(f"  - 軌跡輪廓圖: {os.path.basename(plot_paths['trajectory_contour'])}")
@@ -224,28 +256,49 @@ def generate_plots(df, output_dir, OUT_PREFIX):
         plot_paths['speed_orientation'] = plot_so_path
         
     else:  # rotation mode
-        figW, ax_w = plt.subplots(1, 1, figsize=(8, 6), constrained_layout=True)
-        ax_w.plot(df["t_s"], df["angular_vel_dps"], lw=2, label="Angular speed (deg/s)")
-        
-        w_all = df["angular_vel_dps"].to_numpy()
         tt = df["t_s"].to_numpy()
+        
+        # 圖1：角度 vs 時間（獨立檔案）
+        fig_theta, ax_theta = plt.subplots(1, 1, figsize=(10, 6), constrained_layout=True)
+        ang_plot = df["angle_deg_unwrapped"].to_numpy()
+        ax_theta.plot(tt, ang_plot, lw=2, color='blue')
+        
+        finite_ang = np.isfinite(ang_plot)
+        if np.any(finite_ang):
+            valid_angles = ang_plot[finite_ang]
+            total_rotation = valid_angles[-1] - valid_angles[0]
+            ax_theta.set_title(f"Angle vs Time (Total rotation: {total_rotation:.1f}°)")
+        else:
+            ax_theta.set_title("Angle vs Time")
+        
+        ax_theta.set_xlabel("Time (s)")
+        ax_theta.set_ylabel("Angle (deg)")
+        ax_theta.grid(True, linestyle="--", alpha=0.4)
+        
+        plot_theta_path = os.path.join(output_dir, f"{OUT_PREFIX}_angle.png")
+        fig_theta.savefig(plot_theta_path, dpi=220)
+        plt.close(fig_theta)
+        plot_paths['angle'] = plot_theta_path
+        
+        # 圖2：角速度 vs 時間（獨立檔案）
+        fig_w, ax_w = plt.subplots(1, 1, figsize=(10, 6), constrained_layout=True)
+        w_all = df["angular_vel_dps"].to_numpy()
+        ax_w.plot(tt, w_all, lw=2, color='blue')
+        
         finite = np.isfinite(w_all)
         if np.any(finite):
-            idx_rel = int(np.nanargmax(np.abs(w_all[finite])))
-            idxs = np.where(finite)[0]
-            i_max = idxs[idx_rel]
-            ax_w.plot([tt[i_max]], [w_all[i_max]], marker="o", markersize=8, color="red",
-                     label=f"Max: {w_all[i_max]:.2f} deg/s @ {tt[i_max]:.2f}s")
+            mean_vel = np.nanmean(w_all)
+            ax_w.set_title(f"Angular Speed vs Time (Mean: {mean_vel:.2f} deg/s)")
+        else:
+            ax_w.set_title("Angular Speed vs Time")
         
         ax_w.set_xlabel("Time (s)")
         ax_w.set_ylabel("Angular speed (deg/s)")
-        ax_w.set_title("Angular Speed vs Time")
         ax_w.grid(True, linestyle="--", alpha=0.4)
-        ax_w.legend(loc="best")
         
         plot_w_path = os.path.join(output_dir, f"{OUT_PREFIX}_angular_speed.png")
-        figW.savefig(plot_w_path, dpi=220)
-        plt.close(figW)
+        fig_w.savefig(plot_w_path, dpi=220)
+        plt.close(fig_w)
         plot_paths['angular_speed'] = plot_w_path
     
     return plot_paths
