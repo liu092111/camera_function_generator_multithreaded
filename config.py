@@ -23,12 +23,12 @@ UNDISTORT_CROP = False  # 校正後是否裁剪黑邊（False 保留完整視野
 
 # ========== 影像方向設定 ==========
 FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動方向與影像顯示方向相反的問題
-FLIP_HORIZONTAL = False  # 水平翻轉（左右翻轉）
+FLIP_HORIZONTAL = True  # 水平翻轉（左右翻轉）
 
 # 統一電壓設定（V)
 VOLTAGE = 1.3
 
-# ========== 多執行緒設定 ==========
+# ========== 多執行緒設定 ========== 
 FRAME_QUEUE_SIZE = 120   # 幀佇列大小（可緩存 1 秒的幀）
 RESULT_QUEUE_SIZE = 30   # 結果佇列大小
 
