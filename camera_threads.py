@@ -11,7 +11,8 @@ import cv2
 from config import (
     CAM_HEIGHT, CAM_WIDTH, MODE,
     MAX_MEAS_JUMP_PX, EMA_ALPHA_POS, EMA_ALPHA_ANGLE,
-    ENABLE_UNDISTORT, FLIP_VERTICAL, FLIP_HORIZONTAL
+    ENABLE_UNDISTORT, FLIP_VERTICAL, FLIP_HORIZONTAL,
+    ENABLE_PID_CONTROL
 )
 from signal_processing import ema
 from image_processing import find_target_and_angle
@@ -216,46 +217,44 @@ def process_thread(frame_queue, result_queue, running, stats, kf, tracker_state,
         if origin_x[0] is None and np.isfinite(fx_mm_abs) and np.isfinite(fy_mm_abs):
             origin_x[0], origin_y[0] = fx_mm_abs, fy_mm_abs
         
-        # 疊字顯示
+        # 疊字顯示（縮小字體避免重疊）
         if origin_x[0] is not None and np.isfinite(fx_mm_abs) and np.isfinite(fy_mm_abs):
             rx = fx_mm_abs - origin_x[0]
             ry = -(fy_mm_abs - origin_y[0])  # 修正Y座標正負號
             pos_text = f"Pos(mm): ({rx:.2f}, {ry:.2f})"
         else:
             pos_text = f"Pos(mm): (NaN, NaN)"
-        cv2.putText(display_frame, pos_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 
-                   0.6, (0, 0, 255), 2)
+        cv2.putText(display_frame, pos_text, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 
+                   0.4, (0, 0, 255), 1)
         
         if np.isfinite(ang_for_draw):
             cv2.putText(display_frame, f"Angle: {ang_for_draw:+.2f} deg", 
-                       (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                       (10, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
         else:
-            cv2.putText(display_frame, "Angle: NaN", (20, 70), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(display_frame, "Angle: NaN", (10, 38), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
         
         if np.isfinite(inst_speed):
             cv2.putText(display_frame, f"Speed: {inst_speed:.2f} mm/s", 
-                       (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                       (10, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
         else:
-            cv2.putText(display_frame, "Speed: NaN mm/s", (20, 100), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv2.putText(display_frame, "Speed: NaN mm/s", (10, 56), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
         
-        # 函數產生器狀態
-        fg_status = f"FG: Mode {fg_controller.current_mode}" if fg_controller.current_mode else "FG: OFF"
-        cv2.putText(display_frame, fg_status, (20, 130), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        # 獲取實際顯示畫面尺寸（用於文字定位）
+        disp_h, disp_w = display_frame.shape[:2]
         
-        # 錄影狀態
+        # 錄影狀態（放在右上角，縮小字體）
         if tracker_state['recording']:
-            cv2.putText(display_frame, "REC", (CAM_HEIGHT - 100, 35), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
-            cv2.circle(display_frame, (CAM_HEIGHT - 130, 25), 8, (0, 0, 255), -1)
+            cv2.putText(display_frame, "REC", (disp_w - 50, 20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+            cv2.circle(display_frame, (disp_w - 60, 15), 5, (0, 0, 255), -1)
         
-        # 顯示 FPS 資訊
+        # 顯示 FPS 資訊（縮小字體）
         info = stats.get_info()
         cv2.putText(display_frame, 
                    f"Cap: {info['capture_fps']:.1f} FPS | Proc: {info['process_fps']:.1f} FPS", 
-                   (20, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                   (10, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 255), 1)
         
         # 放入結果佇列（包含原始幀和 box）
         result_data = {

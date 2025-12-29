@@ -240,7 +240,7 @@ grid_max_x = np.max(dst_pts[:, 0])
 grid_min_y = np.min(dst_pts[:, 1])
 grid_max_y = np.max(dst_pts[:, 1])
 
-crop_margin = 5
+crop_margin = 30  # 裁切邊緣像素（移除邊緣殘留的 distortion）
 valid_x0 = int(np.ceil(grid_min_x)) + crop_margin
 valid_y0 = int(np.ceil(grid_min_y)) + crop_margin
 valid_x1 = int(np.floor(grid_max_x)) - crop_margin

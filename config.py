@@ -7,7 +7,7 @@
 import numpy as np
 
 # ========== 攝影機設定 ==========
-MODE = "rotation"  # "straight" 或 "rotation"
+MODE = "straight"  # "straight" 或 "rotation"
 CAMERA_INDEX = 1
 CAM_WIDTH = 640    # 攝影機解析度寬度
 CAM_HEIGHT = 480   # 攝影機解析度高度
@@ -21,12 +21,35 @@ ENABLE_UNDISTORT = True  # 是否啟用畸變校正
 CALIBRATION_DATA_PATH = "calibration/tps_rectification_map.npz"  # 校正數據路徑
 UNDISTORT_CROP = False  # 校正後是否裁剪黑邊（False 保留完整視野）
 
+
 # ========== 影像方向設定 ==========
 FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動方向與影像顯示方向相反的問題
 FLIP_HORIZONTAL = True  # 水平翻轉（左右翻轉）
 
 # 統一電壓設定（V)
-VOLTAGE = 1.3
+VOLTAGE = 1.2
+
+# ========== PID 控制設定 ==========
+ENABLE_PID_CONTROL = True  # 是否啟用 PID 控制
+
+# Straight Mode 智能校正參數
+# 當角度偏移超過閾值時，自動切換到旋轉模式校正姿態
+ANGLE_CORRECTION_THRESHOLD = 10.0   # 角度偏移閾值（度），超過此值觸發旋轉校正
+ANGLE_CORRECTION_TOLERANCE = 2.0    # 校正容差（度），角度回到此範圍內視為校正完成
+DEFAULT_STRAIGHT_MODE = 1           # 預設直走模式 (1=前進, 3=後退)
+
+# Straight Mode 電壓調整參數（橫向偏移校正）
+STRAIGHT_PID_KP = 0.03     # 比例增益（mm 偏移 -> V 補償）
+STRAIGHT_PID_KI = 0.005    # 積分增益
+STRAIGHT_PID_KD = 0.01     # 微分增益
+STRAIGHT_DEADBAND = 0.3    # 死區（mm），偏移小於此值不校正
+STRAIGHT_CORRECTION_RANGE = 0.3  # 電壓校正範圍 (V)
+
+# Rotation Mode PID 參數（旋轉到目標角度後停止）
+ROTATION_TARGET_ANGLE = 90.0    # 目標旋轉角度（度）
+ROTATION_ANGLE_TOLERANCE = 2.0  # 角度容差（度）
+ROTATION_DECEL_ANGLE = 20.0     # 開始減速的剩餘角度（度）
+ROTATION_MIN_VOLTAGE = 0.5      # 減速時的最低電壓 (V)
 
 # ========== 多執行緒設定 ========== 
 FRAME_QUEUE_SIZE = 120   # 幀佇列大小（可緩存 1 秒的幀）

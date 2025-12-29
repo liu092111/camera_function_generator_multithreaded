@@ -350,3 +350,44 @@ class FunctionGeneratorController:
             print("函數產生器輸出已關閉 (電壓=0V)")
         except Exception as e:
             print(f"關閉函數產生器失敗: {e}")
+    
+    def set_voltages(self, ch1_volt, ch2_volt, silent=True):
+        """
+        動態設定兩通道電壓（用於 PID 控制）
+        
+        Args:
+            ch1_volt: CH1 電壓 (V)
+            ch2_volt: CH2 電壓 (V)
+            silent: 是否靜默模式（不印出訊息）
+        
+        Returns:
+            成功返回 True，失敗返回 False
+        """
+        if not self.connected or not self.continuous_output_setup:
+            return False
+        
+        try:
+            # 限制電壓範圍 (0 ~ 3V)
+            ch1_volt = max(0.0, min(3.0, ch1_volt))
+            ch2_volt = max(0.0, min(3.0, ch2_volt))
+            
+            self.inst.write(f'SOUR1:VOLT {ch1_volt:.3f}; SOUR2:VOLT {ch2_volt:.3f}')
+            # 不使用 *WAI 以減少延遲
+            
+            if not silent:
+                print(f"FG 電壓更新: CH1={ch1_volt:.3f}V, CH2={ch2_volt:.3f}V")
+            
+            return True
+            
+        except Exception as e:
+            if not silent:
+                print(f"設定電壓失敗: {e}")
+            return False
+    
+    def get_current_mode(self):
+        """獲取當前模式"""
+        return self.current_mode
+    
+    def is_output_active(self):
+        """檢查輸出是否活躍"""
+        return self.connected and self.continuous_output_setup and self.current_mode is not None

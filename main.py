@@ -30,7 +30,10 @@ import numpy as np
 from config import (
     MODE, CAMERA_INDEX, CAM_WIDTH, CAM_HEIGHT, CAM_FPS_REQ,
     RECORD_OUTPUT, WINDOW_TITLE, FRAME_QUEUE_SIZE, RESULT_QUEUE_SIZE,
-    VOLTAGE, ENABLE_UNDISTORT
+    VOLTAGE, ENABLE_UNDISTORT, ENABLE_PID_CONTROL,
+    ANGLE_CORRECTION_THRESHOLD, ANGLE_CORRECTION_TOLERANCE, DEFAULT_STRAIGHT_MODE,
+    STRAIGHT_PID_KP, STRAIGHT_PID_KI, STRAIGHT_PID_KD, STRAIGHT_DEADBAND, STRAIGHT_CORRECTION_RANGE,
+    ROTATION_TARGET_ANGLE, ROTATION_ANGLE_TOLERANCE, ROTATION_DECEL_ANGLE, ROTATION_MIN_VOLTAGE
 )
 from stats import Stats
 from function_generator import FunctionGeneratorController
@@ -38,9 +41,10 @@ from image_processing import find_target_and_angle, calibrate_scale
 from signal_processing import make_kalman
 from camera_threads import capture_thread, process_thread
 from data_export import process_and_export_data
+from pid_controller import UnifiedPIDController
 
 
-def show_help():
+def show_help(pid_enabled=False):
     """顯示幫助信息"""
     print("\n" + "="*60)
     print("整合式攝影機追蹤與函數產生器控制系統 (多執行緒)")
@@ -53,6 +57,10 @@ def show_help():
     print("  [1-4]       - Mode 1-4")
     print("  [0]         - 關閉函數產生器輸出")
     print("")
+    if pid_enabled:
+        print("PID 控制：")
+        print("  [P]         - 切換 PID 控制開關")
+        print("")
     print("其他：")
     print("  [H]         - 顯示此幫助")
     print("="*60)
@@ -135,7 +143,42 @@ def main():
     # 共享狀態
     running = [True]
     stats = Stats()
-    tracker_state = {'recording': False}
+    tracker_state = {'recording': False, 'pid_active': False}
+    
+    # 初始化 PID 控制器（如果啟用）
+    pid_controller = None
+    current_fg_mode = None  # 當前 FG 模式
+    if ENABLE_PID_CONTROL:
+        print("\n初始化 PID 控制器...")
+        pid_controller = UnifiedPIDController(
+            mode=MODE, 
+            base_voltage=VOLTAGE,
+            straight_mode=DEFAULT_STRAIGHT_MODE,
+            angle_threshold=ANGLE_CORRECTION_THRESHOLD,
+            correction_tolerance=ANGLE_CORRECTION_TOLERANCE
+        )
+        
+        # 配置智能校正控制器的電壓 PID 參數
+        pid_controller.smart_straight_ctrl.voltage_pid.set_gains(
+            kp=STRAIGHT_PID_KP, 
+            ki=STRAIGHT_PID_KI, 
+            kd=STRAIGHT_PID_KD
+        )
+        pid_controller.smart_straight_ctrl.voltage_pid.deadband = STRAIGHT_DEADBAND
+        pid_controller.smart_straight_ctrl.voltage_correction_range = STRAIGHT_CORRECTION_RANGE
+        
+        # 配置 Rotation Mode 參數
+        pid_controller.rotation_ctrl.target_angle = ROTATION_TARGET_ANGLE
+        pid_controller.rotation_ctrl.angle_tolerance = ROTATION_ANGLE_TOLERANCE
+        
+        print(f"✓ PID 控制器已初始化 (模式: {MODE})")
+        if MODE.lower() == 'straight':
+            print(f"  智能姿態校正：角度閾值 ±{ANGLE_CORRECTION_THRESHOLD}°, 校正容差 {ANGLE_CORRECTION_TOLERANCE}°")
+            print(f"  電壓調整 PID: Kp={STRAIGHT_PID_KP}, Ki={STRAIGHT_PID_KI}, Kd={STRAIGHT_PID_KD}")
+            print(f"  死區: {STRAIGHT_DEADBAND}mm, 電壓校正範圍: ±{STRAIGHT_CORRECTION_RANGE}V")
+            print(f"  FG 模式對應: 直走=Mode 1/3, 旋轉校正=Mode 2/4")
+        else:
+            print(f"  Rotation Mode: 目標角度={ROTATION_TARGET_ANGLE}°, 容差={ROTATION_ANGLE_TOLERANCE}°")
     
     # 建立佇列
     frame_queue = queue.Queue(maxsize=FRAME_QUEUE_SIZE)
@@ -156,12 +199,18 @@ def main():
     capture_t.start()
     process_t.start()
     
-    show_help()
+    show_help(pid_enabled=ENABLE_PID_CONTROL)
     print(f"\n系統狀態：")
     print(f"✓ 攝影機：已連接 ({actual_width}x{actual_height} @ {actual_fps:.0f} FPS)")
     print(f"{'✓' if undistort_enabled else '✗'} 畸變校正：{'已啟用' if undistort_enabled else '已停用'}")
     print(f"{'✓' if fg_connected else '✗'} 函數產生器：{'已連接' if fg_connected else '未連接'}")
+    print(f"{'✓' if ENABLE_PID_CONTROL else '✗'} PID 控制：{'可用 (按 P 啟用)' if ENABLE_PID_CONTROL else '已停用'}")
     print(f"\n系統就緒！按 [H] 查看幫助\n")
+    
+    # PID 控制相關變數
+    pid_update_counter = 0
+    PID_UPDATE_INTERVAL = 5  # 每 5 幀更新一次 PID（降低 FG 通訊頻率）
+    angle_accumulator = []  # 用於角度累積計算（rotation mode）
     
     # 錄影相關
     writer = None
@@ -187,23 +236,32 @@ def main():
                         output_dir = f"{run_tag}_{MODE}_{voltage_str}V"
                         os.makedirs(output_dir, exist_ok=True)
                         
-                        # 使用 AVI 格式以確保兼容性
-                        out_path = os.path.join(output_dir, f"camera_{MODE}_tracked.avi")
-                        out_path_raw = os.path.join(output_dir, f"camera_{MODE}_raw.avi")
+                        # 使用 MP4 格式（較好壓縮，廣泛支援）
+                        out_path = os.path.join(output_dir, f"camera_{MODE}_tracked.mp4")
+                        out_path_raw = os.path.join(output_dir, f"camera_{MODE}_raw.mp4")
                         
                         # 從實際 frame 獲取尺寸（避免 undistort 造成尺寸不匹配）
                         frame_height, frame_width = frame.shape[:2]
                         frame_size = (frame_width, frame_height)
                         
-                        # 使用 XVID codec（不依賴 FFmpeg，支援高 FPS）
-                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                        # 使用 mp4v codec（支援高 FPS，兼容性佳）
+                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                         writer = cv2.VideoWriter(out_path, fourcc, actual_fps, frame_size)
                         writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, frame_size)
                         
-                        # 檢查 writer 是否成功開啟
+                        # 檢查 writer 是否成功開啟，嘗試備用 codec
                         if not writer.isOpened():
-                            print("警告: XVID codec 不可用，嘗試 MJPG...")
-                            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                            print("警告: mp4v codec 不可用，嘗試 avc1 (H.264)...")
+                            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+                            writer = cv2.VideoWriter(out_path, fourcc, actual_fps, frame_size)
+                            writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, frame_size)
+                        
+                        # 如果 MP4 仍然失敗，回退到 AVI 格式
+                        if not writer.isOpened():
+                            print("警告: MP4 編碼器不可用，回退到 AVI 格式...")
+                            out_path = os.path.join(output_dir, f"camera_{MODE}_tracked.avi")
+                            out_path_raw = os.path.join(output_dir, f"camera_{MODE}_raw.avi")
+                            fourcc = cv2.VideoWriter_fourcc(*'XVID')
                             writer = cv2.VideoWriter(out_path, fourcc, actual_fps, frame_size)
                             writer_raw = cv2.VideoWriter(out_path_raw, fourcc, actual_fps, frame_size)
                         
@@ -238,6 +296,50 @@ def main():
                         data['angle'], mm_per_px,
                         data.get('box')  # 記錄 box
                     ))
+                    
+                    # === PID 控制邏輯 ===
+                    if pid_controller is not None and tracker_state.get('pid_active', False):
+                        pid_update_counter += 1
+                        
+                        # 每隔一段時間更新 PID
+                        if pid_update_counter >= PID_UPDATE_INTERVAL:
+                            pid_update_counter = 0
+                            
+                            # 獲取當前位置和角度
+                            x_mm = data['fx_mm_abs']
+                            y_mm = data['fy_mm_abs']
+                            current_angle = data['angle'] if np.isfinite(data['angle']) else 0.0
+                            
+                            # 更新 PID 控制器
+                            pid_result = pid_controller.update(
+                                x_mm, y_mm, current_angle, 
+                                current_time=data['timestamp']
+                            )
+                            
+                            # 檢查是否需要切換 FG 模式（智能校正）
+                            if pid_result.get('mode_changed', False) and pid_result.get('fg_mode') is not None:
+                                new_mode = pid_result['fg_mode']
+                                if fg_connected and current_fg_mode != new_mode:
+                                    fg_controller.switch_mode(new_mode)
+                                    current_fg_mode = new_mode
+                            
+                            # 應用電壓調整
+                            if fg_connected and fg_controller.is_output_active():
+                                if pid_result['should_output']:
+                                    fg_controller.set_voltages(
+                                        pid_result['ch1_voltage'],
+                                        pid_result['ch2_voltage'],
+                                        silent=True
+                                    )
+                                else:
+                                    # Rotation mode 完成，停止輸出
+                                    fg_controller.turn_off()
+                                    tracker_state['pid_active'] = False
+                                    print(f"[PID] Rotation 完成，已停止輸出")
+                            
+                            # Rotation mode 完成檢查
+                            if pid_result.get('complete', False):
+                                print(f"[PID] 已達到目標角度 {ROTATION_TARGET_ANGLE}°")
                 
             except queue.Empty:
                 pass
@@ -268,8 +370,36 @@ def main():
                 if fg_connected:
                     mode_num = int(chr(key))
                     fg_controller.switch_mode(mode_num)
+                    current_fg_mode = mode_num
+                    
+                    # 如果是直走模式 (1 或 3)，更新 PID 控制器的 straight_mode
+                    if pid_controller is not None and ENABLE_PID_CONTROL:
+                        if mode_num in [1, 3]:
+                            pid_controller.set_straight_mode(mode_num)
+                        
+                        # 自動啟用 PID 控制
+                        if not tracker_state.get('pid_active', False):
+                            tracker_state['pid_active'] = True
+                            pid_controller.reset()
+                            pid_controller.enable(True)
+                            print("[PID] 已自動啟用 PID 控制")
                 else:
                     print("函數產生器未連接")
+            elif key == ord('p') or key == ord('P'):
+                # 切換 PID 控制
+                if pid_controller is not None and ENABLE_PID_CONTROL:
+                    if tracker_state.get('pid_active', False):
+                        tracker_state['pid_active'] = False
+                        pid_controller.enable(False)
+                        print("[PID] PID 控制已停用")
+                    else:
+                        tracker_state['pid_active'] = True
+                        pid_controller.reset()
+                        pid_controller.enable(True)
+                        angle_accumulator.clear()  # 清空角度累積
+                        print("[PID] PID 控制已啟用")
+                else:
+                    print("PID 控制未配置")
     
     except KeyboardInterrupt:
         print("\n接收到中斷信號...")
