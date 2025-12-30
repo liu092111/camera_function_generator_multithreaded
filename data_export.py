@@ -95,24 +95,77 @@ def process_and_export_data(rec_data, output_dir, mm_per_px):
     
     # 角速度計算（for rotation mode）
     ang_vel = np.full_like(ang_unwrap, np.nan, dtype=float)
-    idx = np.where(mask_ang)[0]
-    if len(idx) >= 2:
-        for i0, i1 in zip(idx[:-1], idx[1:]):
-            dt = t[i1] - t[i0]
-            if dt > 0:
-                ang_vel[i1] = (ang_unwrap[i1] - ang_unwrap[i0]) / dt
-        # 移除異常值（角速度跳躍太大的點）
-        if MODE.lower() == "rotation":
-            # 計算角速度的中位數和標準差，過濾掉異常值
+    
+    if MODE.lower() == "rotation":
+        # 使用解包裹後的角度來計算角速度
+        # 找出有效的角度索引
+        valid_ang_idx = np.where(np.isfinite(ang_unwrap))[0]
+        
+        if len(valid_ang_idx) >= 2:
+            # 計算角速度：使用有限差分
+            for i in range(1, len(valid_ang_idx)):
+                curr_idx = valid_ang_idx[i]
+                prev_idx = valid_ang_idx[i-1]
+                dt = t[curr_idx] - t[prev_idx]
+                if dt > 0:
+                    dtheta = ang_unwrap[curr_idx] - ang_unwrap[prev_idx]
+                    ang_vel[curr_idx] = dtheta / dt
+            
+            # 第一步：移除明顯異常的角速度（基於物理合理性）
+            # 假設最大合理角速度不超過 500 deg/s
+            MAX_REASONABLE_ANGULAR_VEL = 500.0
+            ang_vel[np.abs(ang_vel) > MAX_REASONABLE_ANGULAR_VEL] = np.nan
+            
+            # 第二步：計算穩態區域的統計資訊（排除開始和結束各 10%）
             valid_ang_vel = ang_vel[np.isfinite(ang_vel)]
-            if len(valid_ang_vel) > 10:
-                median_vel = np.median(valid_ang_vel)
-                std_vel = np.std(valid_ang_vel)
-                # 過濾掉超過中位數 ± 5倍標準差的值
-                threshold = max(5 * std_vel, 100)  # 至少 100 deg/s 的閾值
-                outlier_mask = np.abs(ang_vel - median_vel) > threshold
-                ang_vel[outlier_mask] = np.nan
-        ang_vel = moving_average(ang_vel, 5)
+            if len(valid_ang_vel) > 20:
+                # 找出中間 80% 的數據
+                n_trim = int(len(valid_ang_vel) * 0.1)
+                if n_trim > 0:
+                    trimmed_vel = np.sort(valid_ang_vel)[n_trim:-n_trim]
+                else:
+                    trimmed_vel = valid_ang_vel
+                
+                if len(trimmed_vel) > 5:
+                    median_vel = np.median(trimmed_vel)
+                    # 使用 IQR（四分位距）來估算變異，更穩健
+                    q75, q25 = np.percentile(trimmed_vel, [75, 25])
+                    iqr = q75 - q25
+                    
+                    # 過濾掉超出 median ± 3*IQR 的值
+                    threshold = max(3.0 * iqr, 30.0)  # 至少 30 deg/s 的閾值
+                    outlier_mask = np.abs(ang_vel - median_vel) > threshold
+                    ang_vel[outlier_mask] = np.nan
+            
+            # 第三步：平滑處理（使用較小的窗口以保留細節）
+            ang_vel = moving_average(ang_vel, 3)
+            
+            # 第四步：再次檢查結尾處的異常（最後 5 個點）
+            # 如果結尾的角速度與前面的中位數差距過大，設為 NaN
+            valid_ang_vel_final = ang_vel[np.isfinite(ang_vel)]
+            if len(valid_ang_vel_final) > 10:
+                # 用中間 80% 計算參考中位數
+                n_ref = int(len(valid_ang_vel_final) * 0.8)
+                ref_median = np.median(valid_ang_vel_final[:n_ref])
+                ref_std = np.std(valid_ang_vel_final[:n_ref])
+                
+                # 檢查最後幾個點
+                n_check = min(10, len(ang_vel) // 10)
+                for i in range(1, n_check + 1):
+                    idx = len(ang_vel) - i
+                    if np.isfinite(ang_vel[idx]):
+                        if np.abs(ang_vel[idx] - ref_median) > 3 * max(ref_std, 20.0):
+                            ang_vel[idx] = np.nan
+    else:
+        # straight mode：使用原有方法
+        idx = np.where(mask_ang)[0]
+        if len(idx) >= 2:
+            for i0, i1 in zip(idx[:-1], idx[1:]):
+                dt = t[i1] - t[i0]
+                if dt > 0:
+                    ang_vel[i1] = (ang_unwrap[i1] - ang_unwrap[i0]) / dt
+            ang_vel = moving_average(ang_vel, 5)
+    
     df["angular_vel_dps"] = ang_vel
     
     # 輸出 CSV
