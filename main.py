@@ -42,6 +42,7 @@ from signal_processing import make_kalman
 from camera_threads import capture_thread, process_thread
 from data_export import process_and_export_data
 from pid_controller import UnifiedPIDController
+from thread_safe_state import ThreadSafeState
 
 
 def show_help(pid_enabled=False):
@@ -143,7 +144,7 @@ def main():
     # 共享狀態
     running = [True]
     stats = Stats()
-    tracker_state = {'recording': False, 'pid_active': False}
+    tracker_state = ThreadSafeState({'recording': False, 'pid_active': False})
     
     # 初始化 PID 控制器（如果啟用）
     pid_controller = None
@@ -233,7 +234,12 @@ def main():
                         run_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
                         # 將電壓格式化為字串
                         voltage_str = str(VOLTAGE)
-                        output_dir = f"{run_tag}_{MODE}_{voltage_str}V"
+                        
+                        # 建立資料夾名稱（包含 PID 參數，如果啟用）
+                        if ENABLE_PID_CONTROL:
+                            output_dir = f"{run_tag}_{MODE}_{voltage_str}V_P={STRAIGHT_PID_KP}_I={STRAIGHT_PID_KI}_D={STRAIGHT_PID_KD}"
+                        else:
+                            output_dir = f"{run_tag}_{MODE}_{voltage_str}V"
                         os.makedirs(output_dir, exist_ok=True)
                         
                         # 使用 MP4 格式（較好壓縮，廣泛支援）
@@ -423,6 +429,7 @@ def main():
         if len(rec_data) > 0 and output_dir:
             print("\n處理資料並輸出...")
             process_and_export_data(rec_data, output_dir, mm_per_px)
+            
         
         # 斷開函數產生器
         fg_controller.disconnect()

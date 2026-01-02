@@ -7,7 +7,9 @@
 ### 核心功能
 - 🎥 **高速相機追蹤** - 支援 120 FPS @ 640x480 解析度
 - 🧵 **多執行緒架構** - 分離讀取、處理和顯示執行緒以提升效能
+- 🔒 **執行緒安全設計** - 共享狀態使用 Lock 保護，確保資料一致性
 - 🎛️ **函數產生器控制** - 支援 4 種波形模式快速切換
+- 🤖 **智能 PID 控制** - 自動姿態校正與軌跡控制
 - 📊 **即時資料分析** - 位置、速度、角度即時追蹤
 - 💾 **自動資料匯出** - CSV 資料和多種視覺化圖表
 
@@ -16,7 +18,12 @@
 - 指數移動平均 (EMA) 降低抖動
 - 自動尺度校準（支援網格或 device 尺寸）
 - 支援 straight 和 rotation 兩種追蹤模式
-- **鏡頭畸變校正** - 廣角鏡頭邊緣扭曲補償
+- **鏡頭畸變校正** - 廣角鏡頭邊緣扭曲補償（支援 TPS 和傳統校正）
+
+### PID 控制功能
+- **Straight Mode 智能校正** - 偵測角度偏移，自動切換旋轉模式校正姿態
+- **Rotation Mode 控制** - 旋轉到指定角度後自動停止
+- **電壓差動校正** - 根據橫向偏移自動調整兩通道電壓
 
 ### 視覺化輸出
 - 位置軌跡圖
@@ -31,7 +38,9 @@ camera_function_generator_multithreaded/
 ├── main.py                    # 主程式入口
 ├── config.py                  # 配置管理（含電壓設定）
 ├── stats.py                   # 執行緒安全的統計模組
+├── thread_safe_state.py       # 執行緒安全的共享狀態模組
 ├── function_generator.py      # 函數產生器控制
+├── pid_controller.py          # PID 控制器（智能姿態校正）
 ├── image_processing.py        # 影像處理與目標檢測
 ├── signal_processing.py       # 訊號處理與濾波
 ├── camera_threads.py          # 多執行緒相機控制
@@ -43,8 +52,8 @@ camera_function_generator_multithreaded/
 │   ├── ONEPERIOD_C_*.csv
 │   └── ONEPERIOD_D_*.csv
 ├── calibration/               # 相機校正資料
-│   ├── calibration_data.npz   # 校正參數（相機內參、畸變係數）
-│   ├── camera_calibration_optimized.py  # 校正程式
+│   ├── tps_rectification_map.npz  # TPS 校正映射表
+│   ├── calibration.py         # 校正程式
 │   └── chest image/           # 校正用棋盤格圖片
 ├── README.md                  # 本檔案
 └── requirements.txt           # Python 依賴套件
@@ -109,6 +118,9 @@ python main.py
 - `4` - Mode 4 (47k Hz, CH1=INV, CH2=NORM)
 - `0` - 關閉函數產生器輸出
 
+#### PID 控制（需啟用 ENABLE_PID_CONTROL）
+- `P` - 切換 PID 控制開關
+
 #### 其他
 - `H` - 顯示幫助訊息
 
@@ -154,6 +166,21 @@ FG_MODE_CONFIGS = {
     },
     # 模式 2-4 同理
 }
+```
+
+#### PID 控制參數
+```python
+ENABLE_PID_CONTROL = True      # 啟用 PID 控制
+
+# Straight Mode 智能校正
+ANGLE_CORRECTION_THRESHOLD = 10.0  # 角度偏移閾值（度）
+ANGLE_CORRECTION_TOLERANCE = 2.0   # 校正容差（度）
+STRAIGHT_PID_KP = 0.03             # 電壓調整比例增益
+STRAIGHT_DEADBAND = 0.3            # 死區（mm）
+
+# Rotation Mode 控制
+ROTATION_TARGET_ANGLE = 90.0       # 目標旋轉角度（度）
+ROTATION_ANGLE_TOLERANCE = 2.0     # 角度容差（度）
 ```
 
 ## 📊 輸出資料
@@ -276,14 +303,35 @@ python camera_calibration_optimized.py
 
 ### 模組說明
 
-- **config.py** - 集中管理所有配置參數
-- **stats.py** - 執行緒安全的效能統計
-- **function_generator.py** - 完整的函數產生器控制邏輯
-- **image_processing.py** - 目標檢測與尺度校準
-- **signal_processing.py** - 數學運算和訊號處理
-- **camera_threads.py** - 多執行緒相機讀取與處理
-- **data_export.py** - 資料處理和圖表生成
-- **main.py** - 程式流程控制
+| 模組 | 功能 |
+|------|------|
+| **main.py** | 程式流程控制與主迴圈 |
+| **config.py** | 集中管理所有配置參數 |
+| **stats.py** | 執行緒安全的效能統計 |
+| **thread_safe_state.py** | 執行緒安全的共享狀態（使用 Lock 保護） |
+| **function_generator.py** | Keysight 33600 系列函數產生器控制 |
+| **pid_controller.py** | PID 控制器（Straight/Rotation 模式） |
+| **image_processing.py** | 目標檢測與尺度校準 |
+| **signal_processing.py** | Kalman 濾波、EMA、角度處理 |
+| **camera_threads.py** | 多執行緒相機讀取與處理 |
+| **data_export.py** | 資料處理和圖表生成 |
+| **undistort.py** | 鏡頭畸變校正（支援 TPS 和傳統校正） |
+
+### 執行緒架構
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  Capture Thread  │────▶│  Process Thread  │────▶│   Main Thread    │
+│                  │     │                  │     │                  │
+│  • 讀取相機幀     │     │  • 畸變校正       │     │  • GUI 顯示      │
+│  • 放入佇列       │     │  • 目標檢測       │     │  • 錄影控制      │
+│                  │     │  • Kalman 濾波    │     │  • PID 控制      │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+    frame_queue              result_queue          tracker_state
+   (執行緒安全)              (執行緒安全)          (ThreadSafeState)
+```
 
 ### 擴展建議
 
@@ -306,5 +354,18 @@ python camera_calibration_optimized.py
 
 ---
 
-**版本**: 2.0.0 (模組化重構版)  
-**最後更新**: 2025-12-07
+**版本**: 2.1.0 (執行緒安全強化版)  
+**最後更新**: 2026-01-02
+
+### 更新日誌
+
+#### v2.1.0 (2026-01-02)
+- ✨ 新增 `thread_safe_state.py` 模組，強化執行緒安全性
+- ✨ 新增 `pid_controller.py` 智能 PID 控制模組
+- 🔧 `tracker_state` 改用 `ThreadSafeState` 類別，避免資料競爭
+- 📝 更新 README 文件
+
+#### v2.0.0 (2025-12-07)
+- 🎉 模組化重構版本
+- 🧵 多執行緒架構
+- 📷 鏡頭畸變校正功能

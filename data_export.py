@@ -455,11 +455,11 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
     ax_contour.set_aspect("equal", adjustable="box")
     ax_contour.set_xlabel("x (mm)")
     ax_contour.set_ylabel("y (mm)")
-    ax_contour.set_title(f"Trajectory with Time Points")
+    ax_contour.set_title(f"Position with Time Points")
     ax_contour.grid(True, linestyle="--", alpha=0.4)
     ax_contour.legend(loc="best")
     
-    plot_contour_path = os.path.join(output_dir, f"{OUT_PREFIX}_trajectory_center_only.png")
+    plot_contour_path = os.path.join(output_dir, f"{OUT_PREFIX}_timepoint_position.png")
     figC.savefig(plot_contour_path, dpi=220)
     plt.close(figC)
     plot_paths['trajectory_contour'] = plot_contour_path
@@ -644,7 +644,7 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
                 resized_frames.append(resized)
             
             combined_frame = np.hstack(resized_frames)
-            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_{n_segments}_timepoints_composite.png")
+            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}composite.png")
             cv2.imwrite(composite_path, combined_frame)
             plot_paths['composite'] = composite_path
         elif len(extracted_frames) > 0:
@@ -658,7 +658,7 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
                 resized_frames.append(resized)
             
             combined_frame = np.hstack(resized_frames)
-            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_{len(extracted_frames)}_timepoints_composite.png")
+            composite_path = os.path.join(output_dir, f"{OUT_PREFIX}_{len(extracted_frames)}composite.png")
             cv2.imwrite(composite_path, combined_frame)
             plot_paths['composite'] = composite_path
     
