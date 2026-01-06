@@ -50,17 +50,24 @@ def show_help(pid_enabled=False):
     print("\n" + "="*60)
     print("整合式攝影機追蹤與函數產生器控制系統 (多執行緒)")
     print("="*60)
+    print("建議操作流程：")
+    print("  1. 架設好設備，確認畫面正常")
+    print("  2. 按 [Space] 開始錄影")
+    print("  3. 按 [1-4] 選擇 FG 模式，驅動 device")
+    if pid_enabled:
+        print("     （PID 控制已啟用，會自動進行校正）")
+    print("")
     print("攝影機控制：")
     print("  [Space]     - 開始/停止錄製")
     print("  [ESC/Q]     - 退出程式")
     print("")
     print("函數產生器控制：")
-    print("  [1-4]       - Mode 1-4")
+    print("  [1-4]       - Mode 1-4 (選擇波型，驅動 device)")
     print("  [0]         - 關閉函數產生器輸出")
     print("")
     if pid_enabled:
-        print("PID 控制：")
-        print("  [P]         - 切換 PID 控制開關")
+        print("PID 控制：已在 config.py 中啟用")
+        print("  按 1-4 選擇模式後會自動啟用 PID 控制")
         print("")
     print("其他：")
     print("  [H]         - 顯示此幫助")
@@ -205,7 +212,7 @@ def main():
     print(f"✓ 攝影機：已連接 ({actual_width}x{actual_height} @ {actual_fps:.0f} FPS)")
     print(f"{'✓' if undistort_enabled else '✗'} 畸變校正：{'已啟用' if undistort_enabled else '已停用'}")
     print(f"{'✓' if fg_connected else '✗'} 函數產生器：{'已連接' if fg_connected else '未連接'}")
-    print(f"{'✓' if ENABLE_PID_CONTROL else '✗'} PID 控制：{'可用 (按 P 啟用)' if ENABLE_PID_CONTROL else '已停用'}")
+    print(f"{'✓' if ENABLE_PID_CONTROL else '✗'} PID 控制：{'已啟用 (按 1-4 後自動生效)' if ENABLE_PID_CONTROL else '已停用'}")
     print(f"\n系統就緒！按 [H] 查看幫助\n")
     
     # PID 控制相關變數
@@ -378,34 +385,20 @@ def main():
                     fg_controller.switch_mode(mode_num)
                     current_fg_mode = mode_num
                     
-                    # 如果是直走模式 (1 或 3)，更新 PID 控制器的 straight_mode
+                    # 如果 PID 控制已在 config 中啟用，自動啟用 PID
                     if pid_controller is not None and ENABLE_PID_CONTROL:
+                        # 如果是直走模式 (1 或 3)，更新 PID 控制器的 straight_mode
                         if mode_num in [1, 3]:
                             pid_controller.set_straight_mode(mode_num)
                         
-                        # 自動啟用 PID 控制
+                        # 自動啟用 PID 控制（如果尚未啟用）
                         if not tracker_state.get('pid_active', False):
                             tracker_state['pid_active'] = True
                             pid_controller.reset()
                             pid_controller.enable(True)
-                            print("[PID] 已自動啟用 PID 控制")
+                            print(f"[PID] PID 控制已自動啟用 (config.ENABLE_PID_CONTROL = True)")
                 else:
                     print("函數產生器未連接")
-            elif key == ord('p') or key == ord('P'):
-                # 切換 PID 控制
-                if pid_controller is not None and ENABLE_PID_CONTROL:
-                    if tracker_state.get('pid_active', False):
-                        tracker_state['pid_active'] = False
-                        pid_controller.enable(False)
-                        print("[PID] PID 控制已停用")
-                    else:
-                        tracker_state['pid_active'] = True
-                        pid_controller.reset()
-                        pid_controller.enable(True)
-                        angle_accumulator.clear()  # 清空角度累積
-                        print("[PID] PID 控制已啟用")
-                else:
-                    print("PID 控制未配置")
     
     except KeyboardInterrupt:
         print("\n接收到中斷信號...")

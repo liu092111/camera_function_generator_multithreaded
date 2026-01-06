@@ -47,7 +47,7 @@ STRAIGHT_CORRECTION_RANGE = 0.3  # 電壓校正範圍 (V)
 
 # Rotation Mode PID 參數（旋轉到目標角度後停止）
 ROTATION_TARGET_ANGLE = 90.0    # 目標旋轉角度（度）
-ROTATION_ANGLE_TOLERANCE = 2.0  # 角度容差（度）
+ROTATION_ANGLE_TOLERANCE = 2.0  # 角度容差（度） 
 ROTATION_DECEL_ANGLE = 20.0     # 開始減速的剩餘角度（度）
 ROTATION_MIN_VOLTAGE = 0.5      # 減速時的最低電壓 (V)
 
