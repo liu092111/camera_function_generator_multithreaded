@@ -21,6 +21,7 @@ class FunctionGeneratorController:
         self.current_mode = None
         self.connected = False
         self.continuous_output_setup = False
+        self.current_wave_group = None  # '25k' or '47k' - 用於快速切換追蹤
         
     def connect(self):
         """連接函數產生器"""
@@ -266,10 +267,28 @@ class FunctionGeneratorController:
     
     def switch_mode(self, mode_num):
         """
-        快速模式切換
+        快速模式切換（舊版，保留兼容）
         
         Args:
             mode_num: 模式編號 (1-4)
+        
+        Returns:
+            成功返回 True，失敗返回 False
+        """
+        # 使用新的超快速切換方法
+        return self.fast_switch_mode(mode_num)
+    
+    def fast_switch_mode(self, mode_num, silent=False):
+        """
+        超快速模式切換（參考 dual_modal_4ms.py 實現）
+        
+        優化策略：
+        - 同頻率組（只換極性）：~0.2-1ms（Mode 1↔3 或 Mode 2↔4）
+        - 跨頻率組（換波形）：~2-4ms（Mode 1/3 ↔ Mode 2/4）
+        
+        Args:
+            mode_num: 模式編號 (1-4)
+            silent: 是否靜默模式
         
         Returns:
             成功返回 True，失敗返回 False
@@ -286,53 +305,98 @@ class FunctionGeneratorController:
         config = FG_MODE_CONFIGS[mode_num]
         mode_data = self.sampling_rates[mode_num]
         
+        # 決定目標波形組
+        target_wave_group = '25k' if mode_num in [1, 3] else '47k'
+        
         try:
-            need_waveform_switch = False
-            if self.current_mode is None:
-                need_waveform_switch = config.get('wave_type', '25k' if mode_num in [1, 3] else '47k') != '25k'
-            else:
-                current_config = FG_MODE_CONFIGS[self.current_mode]
-                current_wave = '25k' if self.current_mode in [1, 3] else '47k'
-                new_wave = '25k' if mode_num in [1, 3] else '47k'
-                need_waveform_switch = current_wave != new_wave
-            
-            need_polarity_change = False
-            if self.current_mode is None:
-                need_polarity_change = True
-            else:
-                current_config = FG_MODE_CONFIGS[self.current_mode]
-                need_polarity_change = (current_config['ch1_pol'] != config['ch1_pol'] or 
-                                      current_config['ch2_pol'] != config['ch2_pol'])
-            
-            if need_waveform_switch or need_polarity_change:
+            # 情況 1: 從待機狀態啟動（完整設定）
+            if self.current_mode is None or self.current_wave_group is None:
+                # 完整設定並開啟輸出
+                self.inst.write('SOUR1:FUNC ARB')
+                self.inst.write('SOUR2:FUNC ARB')
+                self.inst.write(f'SOUR1:FUNC:ARB {mode_data["name1"]}')
+                self.inst.write(f'SOUR2:FUNC:ARB {mode_data["name2"]}')
+                self.inst.write(f'SOUR1:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
+                self.inst.write(f'SOUR2:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
+                self.inst.write(f'SOUR1:VOLT {config["ch1_volt"]}')
+                self.inst.write(f'SOUR2:VOLT {config["ch2_volt"]}')
+                self.inst.write('SOUR1:VOLT:OFFS 0')  
+                self.inst.write('SOUR2:VOLT:OFFS 0')
+                self.inst.write(f'SOUR1:FREQ {mode_data["freq"]}')
+                self.inst.write(f'SOUR2:FREQ {mode_data["freq"]}')
+                self.inst.write('SOUR1:PHAS 0')
+                self.inst.write('SOUR2:PHAS 0')
+                self.inst.write('*WAI')
+                
+                # 設定同步
+                self.inst.write('SOUR1:TRACK OFF')
+                self.inst.write('SOUR2:TRACK OFF')
+                self.inst.write('SOUR2:TRACK ON')
+                self.inst.write('SOUR2:PHAS:SYNC')
+                self.inst.write('*WAI')
+                
+                # 設定極性
+                self.inst.write(f'OUTP1:POL {config["ch1_pol"]}')
+                self.inst.write(f'OUTP2:POL {config["ch2_pol"]}')
+                self.inst.write('*WAI')
+                
+                # 開啟輸出
+                self.inst.write('OUTP1 ON')
+                self.inst.write('OUTP2 ON') 
+                self.inst.write('*WAI')
+                
+                switch_type = "完整啟動"
+                
+            # 情況 2: 同波形組，只需改極性（超快速 ~0.2-1ms）
+            elif self.current_wave_group == target_wave_group:
+                # 優化的極性切換 - 合併指令減少延遲
                 self.inst.write('OUTP1 OFF; OUTP2 OFF')
-                
-                if need_waveform_switch:
-                    self.inst.write(f'SOUR1:FUNC:ARB {mode_data["name1"]}')
-                    self.inst.write(f'SOUR2:FUNC:ARB {mode_data["name2"]}')
-                    self.inst.write(f'SOUR1:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
-                    self.inst.write(f'SOUR2:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
-                    self.inst.write(f'SOUR1:FREQ {mode_data["freq"]}')
-                    self.inst.write(f'SOUR2:FREQ {mode_data["freq"]}')
-                    self.inst.write('SOUR2:PHAS:SYNC')
-                    self.inst.write('*WAI')
-                
-                if need_polarity_change:
-                    self.inst.write(f'OUTP1:POL {config["ch1_pol"]}')
-                    self.inst.write(f'OUTP2:POL {config["ch2_pol"]}')
-                    self.inst.write('*WAI')
-                
+                self.inst.write(f'OUTP1:POL {config["ch1_pol"]}; OUTP2:POL {config["ch2_pol"]}')
                 self.inst.write('OUTP1 ON; OUTP2 ON')
                 self.inst.write('*WAI')
-            
-            self.inst.write(f'SOUR1:VOLT {config["ch1_volt"]}; SOUR2:VOLT {config["ch2_volt"]}')
-            self.inst.write('*WAI')
+                
+                switch_type = "極性切換"
+                
+            # 情況 3: 需要切換波形組（中速 ~2-4ms）
+            else:
+                # 關閉輸出進行安全切換
+                self.inst.write('OUTP1 OFF; OUTP2 OFF')
+                
+                # 設定完整的波形參數（合併命令減少延遲）
+                self.inst.write('SOUR1:FUNC ARB; SOUR2:FUNC ARB')
+                self.inst.write(f'SOUR1:FUNC:ARB {mode_data["name1"]}')
+                self.inst.write(f'SOUR2:FUNC:ARB {mode_data["name2"]}')
+                self.inst.write(f'SOUR1:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}; SOUR2:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
+                self.inst.write(f'SOUR1:VOLT {config["ch1_volt"]}; SOUR2:VOLT {config["ch2_volt"]}')
+                self.inst.write('SOUR1:VOLT:OFFS 0; SOUR2:VOLT:OFFS 0')
+                self.inst.write(f'SOUR1:FREQ {mode_data["freq"]}; SOUR2:FREQ {mode_data["freq"]}')
+                self.inst.write('SOUR1:PHAS 0; SOUR2:PHAS 0')
+                self.inst.write('*WAI')
+                
+                # 重新設定同步
+                self.inst.write('SOUR1:TRACK OFF; SOUR2:TRACK OFF')
+                self.inst.write('SOUR2:TRACK ON')
+                self.inst.write('SOUR2:PHAS:SYNC')
+                
+                # 設定極性
+                self.inst.write(f'OUTP1:POL {config["ch1_pol"]}; OUTP2:POL {config["ch2_pol"]}')
+                self.inst.write('*WAI')
+                
+                # 重新開啟輸出
+                self.inst.write('OUTP1 ON; OUTP2 ON')
+                self.inst.write('*WAI')
+                
+                switch_type = "波形+極性切換"
             
             switch_time = (time.time() - start_time) * 1000
             self.current_mode = mode_num
+            self.current_wave_group = target_wave_group
             
-            print(f"FG Mode {mode_num} | {switch_time:.1f}ms | {config['desc']} | "
-                  f"CH1={config['ch1_volt']}V, CH2={config['ch2_volt']}V")
+            if not silent:
+                print(f"FG Mode {mode_num} | {switch_time:.2f}ms | {switch_type} | "
+                      f"Freq: {mode_data['freq']:.1f}Hz | "
+                      f"CH1={config['ch1_pol']}/{config['ch1_volt']}V, "
+                      f"CH2={config['ch2_pol']}/{config['ch2_volt']}V")
             return True
             
         except Exception as e:
@@ -347,9 +411,89 @@ class FunctionGeneratorController:
             self.inst.write('SOUR1:VOLT 0; SOUR2:VOLT 0')
             self.inst.write('*WAI')
             self.current_mode = None
+            # 保留 current_wave_group 以便下次快速切換
             print("函數產生器輸出已關閉 (電壓=0V)")
         except Exception as e:
             print(f"關閉函數產生器失敗: {e}")
+    
+    def ultra_fast_switch_mode(self, mode_num, silent=True):
+        """
+        用於 PID 控制的超快速模式切換（最小化延遲版本）
+        
+        專門為頻繁的 PID 控制切換優化：
+        - 減少打印輸出
+        - 減少不必要的等待
+        - 同組切換：~0.2-1ms
+        - 跨組切換：~2-4ms
+        
+        Args:
+            mode_num: 模式編號 (1-4)
+            silent: 是否靜默模式（預設 True）
+        
+        Returns:
+            成功返回 True，失敗返回 False
+        """
+        if not self.connected or mode_num not in self.sampling_rates:
+            return False
+        
+        if not self.continuous_output_setup:
+            if not self.setup_continuous_output():
+                return False
+        
+        # 如果模式相同，不需要切換
+        if self.current_mode == mode_num:
+            return True
+        
+        start_time = time.time()
+        prev_mode = self.current_mode  # 保存舊模式用於顯示
+        
+        config = FG_MODE_CONFIGS[mode_num]
+        mode_data = self.sampling_rates[mode_num]
+        target_wave_group = '25k' if mode_num in [1, 3] else '47k'
+        
+        try:
+            # 情況 1: 從待機狀態啟動
+            if self.current_mode is None or self.current_wave_group is None:
+                result = self.fast_switch_mode(mode_num, silent=silent)
+                return result
+                
+            # 情況 2: 同波形組，只需改極性（超快速）
+            elif self.current_wave_group == target_wave_group:
+                # 最精簡的極性切換
+                self.inst.write('OUTP1 OFF; OUTP2 OFF')
+                self.inst.write(f'OUTP1:POL {config["ch1_pol"]}; OUTP2:POL {config["ch2_pol"]}')
+                self.inst.write('OUTP1 ON; OUTP2 ON')
+                # 不使用 *WAI 以獲得最快速度（下一個命令會自動等待）
+                
+                switch_type = "極性切換"
+                
+            # 情況 3: 跨波形組切換
+            else:
+                self.inst.write('OUTP1 OFF; OUTP2 OFF')
+                self.inst.write(f'SOUR1:FUNC:ARB {mode_data["name1"]}; SOUR2:FUNC:ARB {mode_data["name2"]}')
+                self.inst.write(f'SOUR1:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}; SOUR2:FUNC:ARB:SRAT {mode_data["sRate"]:.0f}')
+                self.inst.write(f'SOUR1:FREQ {mode_data["freq"]}; SOUR2:FREQ {mode_data["freq"]}')
+                self.inst.write('SOUR2:PHAS:SYNC')
+                self.inst.write(f'OUTP1:POL {config["ch1_pol"]}; OUTP2:POL {config["ch2_pol"]}')
+                self.inst.write('OUTP1 ON; OUTP2 ON')
+                self.inst.write('*WAI')
+                
+                switch_type = "波形+極性切換"
+            
+            switch_time = (time.time() - start_time) * 1000
+            
+            self.current_mode = mode_num
+            self.current_wave_group = target_wave_group
+            
+            if not silent:
+                print(f"[PID] Mode {prev_mode} → {mode_num} | {switch_time:.2f}ms | {switch_type}")
+            
+            return True
+            
+        except Exception as e:
+            if not silent:
+                print(f"超快速模式切換失敗: {e}")
+            return False
     
     def set_voltages(self, ch1_volt, ch2_volt, silent=True):
         """

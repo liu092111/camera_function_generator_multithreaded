@@ -27,10 +27,10 @@ FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動
 FLIP_HORIZONTAL = True  # 水平翻轉（左右翻轉）
 
 # 統一電壓設定（V)
-VOLTAGE = 1.2
+VOLTAGE = 1.4
 
 # ========== PID 控制設定 ==========
-ENABLE_PID_CONTROL = True  # 是否啟用 PID 控制
+ENABLE_PID_CONTROL = False  # 是否啟用 PID 控制
 
 # Straight Mode 智能校正參數
 # 當角度偏移超過閾值時，自動切換到旋轉模式校正姿態

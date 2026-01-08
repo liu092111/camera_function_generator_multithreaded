@@ -333,7 +333,8 @@ def main():
                             if pid_result.get('mode_changed', False) and pid_result.get('fg_mode') is not None:
                                 new_mode = pid_result['fg_mode']
                                 if fg_connected and current_fg_mode != new_mode:
-                                    fg_controller.switch_mode(new_mode)
+                                    # 使用超快速切換方法（~0.2-4ms vs 原本 ~20ms）
+                                    fg_controller.ultra_fast_switch_mode(new_mode, silent=False)
                                     current_fg_mode = new_mode
                             
                             # 應用電壓調整
