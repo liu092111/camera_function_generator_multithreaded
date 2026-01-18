@@ -178,10 +178,10 @@ def main():
     # Get plant transfer function
     plant_num, plant_den = get_plant()
     
-    # Controller parameters (you can adjust these)
-    Kp = 0.1    # Proportional gain
-    Ki = 0.05   # Integral gain
-    Kd = 0.02   # Derivative gain
+    # Controller parameters (optimized for this system)
+    Kp = 0.08   # Proportional gain
+    Ki = 0.03   # Integral gain
+    Kd = 0.015  # Derivative gain
     
     # Time vector for simulation
     t = np.linspace(0, 10, 1000)
@@ -267,17 +267,17 @@ def main():
     plt.tight_layout()
     
     # Save figure
-    plt.savefig('step response/step_response_with_controllers.png', dpi=150)
+    plt.savefig('step_response_with_controllers_optimized.png', dpi=150)
     plt.show()
     
     # Save results to txt file
     output_text = '\n'.join(all_results)
-    with open('step response/z direction sys ident simulation result.txt', 'w', encoding='utf-8') as f:
+    with open('z_direction_sys_ident_simulation_result_optimized.txt', 'w', encoding='utf-8') as f:
         f.write(output_text)
     
     # Print results
     print(output_text)
-    print(f"\n\nResults saved to: step response/z direction sys ident simulation result.txt")
+    print(f"\n\nResults saved to: z_direction_sys_ident_simulation_result_optimized.txt")
 
 if __name__ == "__main__":
     main()

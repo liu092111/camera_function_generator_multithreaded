@@ -1,0 +1,57 @@
+Z Direction System Identification Simulation Results
+============================================================
+
+Plant Transfer Function: G(s) = (406.9s + 2553) / (s^3 + 9.298s^2 + 18.78s + 23.66)
+
+Controller Parameters:
+  Kp = 0.08
+  Ki = 0.03
+  Kd = 0.015
+
+============================================================
+Open Loop (System Identification Fitting)
+============================================================
+  Rise Time (10%-90%):        0.9910 s
+  Peak Time:                  2.1221 s
+  Peak Value:                 1.0988
+  Settling Time (2%):      3.2432 s
+  Overshoot:                  9.88 %
+  Steady State Value:         1.0000
+  Steady State Error:         0.0000
+  Steady State Error (%):     0.00 %
+
+============================================================
+PI Controller (Kp=0.08, Ki=0.03)
+============================================================
+  Rise Time (10%-90%):        0.2102 s
+  Peak Time:                  0.5506 s
+  Peak Value:                 1.4416
+  Settling Time (2%):      4.5946 s
+  Overshoot:                  44.16 %
+  Steady State Value:         1.0000
+  Steady State Error:         0.0000
+  Steady State Error (%):     0.00 %
+
+============================================================
+PD Controller (Kp=0.08, Kd=0.015)
+============================================================
+  Rise Time (10%-90%):        0.1902 s
+  Peak Time:                  0.4505 s
+  Peak Value:                 1.1322
+  Settling Time (2%):      0.9009 s
+  Overshoot:                  13.22 %
+  Steady State Value:         1.0000
+  Steady State Error:         0.0000
+  Steady State Error (%):     0.00 %
+
+============================================================
+PID Controller (Kp=0.08, Ki=0.03, Kd=0.015)
+============================================================
+  Rise Time (10%-90%):        0.2302 s
+  Peak Time:                  0.4705 s
+  Peak Value:                 1.0475
+  Settling Time (2%):      4.0741 s
+  Overshoot:                  4.75 %
+  Steady State Value:         1.0000
+  Steady State Error:         0.0000
+  Steady State Error (%):     0.00 %
