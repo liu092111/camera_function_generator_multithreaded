@@ -34,6 +34,54 @@ SAVGOL_WINDOW = 11  # Savitzky-Golay 窗口大小（必須是奇數）
 SAVGOL_POLY_ORDER = 3  # Savitzky-Golay 多項式階數
 MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 
+# 啟動檢測參數
+STARTUP_SPEED_THRESHOLD = 5.0  # 啟動速度閾值 (mm/s)，速度超過此值視為已啟動
+
+
+def detect_startup_index(speed_data, threshold=None):
+    """
+    檢測啟動時間點的索引
+    
+    Args:
+        speed_data: 速度資料陣列
+        threshold: 啟動速度閾值，若為 None 則使用全域設定
+    
+    Returns:
+        啟動時間點的索引，若無法檢測則返回 0
+    """
+    if threshold is None:
+        threshold = STARTUP_SPEED_THRESHOLD
+    
+    # 找到速度首次超過閾值的位置
+    startup_indices = np.where(speed_data > threshold)[0]
+    
+    if len(startup_indices) > 0:
+        return startup_indices[0]
+    
+    return 0
+
+
+def calculate_avg_speed_after_startup(speed_data, threshold=None):
+    """
+    計算啟動後的平均速度
+    
+    Args:
+        speed_data: 速度資料陣列
+        threshold: 啟動速度閾值
+    
+    Returns:
+        (啟動後的平均速度, 啟動索引)
+    """
+    startup_idx = detect_startup_index(speed_data, threshold)
+    
+    # 只計算啟動後的資料
+    speed_after_startup = speed_data[startup_idx:]
+    
+    if len(speed_after_startup) > 0:
+        return np.mean(speed_after_startup), startup_idx
+    
+    return np.mean(speed_data), 0
+
 
 def smooth_data(data, method="savgol"):
     """
@@ -239,7 +287,7 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
         return
     
     # 創建圖表
-    fig, ax = plt.subplots(1, 1, figsize=(12, 6), constrained_layout=True)
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10), constrained_layout=True)
     
     # 設定顏色循環
     colors = plt.cm.tab10.colors
@@ -261,26 +309,92 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
             t_relative = t_valid - t_valid[0]
             color = colors[i % len(colors)]
             
-            # 計算統計資訊
-            avg_speed = np.mean(speed_valid)
+            # 計算統計資訊（使用啟動後的平均速度）
+            avg_speed, startup_idx = calculate_avg_speed_after_startup(speed_valid)
             max_speed = np.max(speed_valid)
             
             # 構建 legend 標籤（包含統計資訊）
             label = f"{name} (Avg={avg_speed:.1f}, Max={max_speed:.1f} mm/s)"
             
             ax.plot(t_relative, speed_valid, lw=1.5, color=color, label=label, alpha=0.8)
+            
+            # 標記啟動時間點
+            if startup_idx > 0:
+                ax.axvline(x=t_relative[startup_idx], color=color, linestyle='--', alpha=0.3, lw=1)
     
     # 設定圖表樣式
-    ax.set_xlabel("Time (s)", fontsize=12)
-    ax.set_ylabel("Speed (mm/s)", fontsize=12)
-    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("Time (s)", fontsize=14)
+    ax.set_ylabel("Speed (mm/s)", fontsize=14)
+    ax.set_title(title, fontsize=16)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=9)
+    ax.legend(loc="upper left", fontsize=18)
+    
+    # 添加說明
+    ax.annotate(f"Avg calculated after startup (threshold={STARTUP_SPEED_THRESHOLD} mm/s)", 
+                xy=(0.02, 0.02), xycoords='axes fraction', fontsize=10, color='gray')
     
     # 儲存圖表
     fig.savefig(output_path, dpi=220, bbox_inches='tight')
     plt.close(fig)
     print(f"✓ 速度比較圖已儲存: {output_path}")
+
+
+def plot_multi_speed_simple(data_dict, output_path, title="Speed Comparison (Simple)"):
+    """
+    繪製多軌跡速度比較圖（簡化版，正方形，legend 只顯示檔案名稱）
+    
+    Args:
+        data_dict: {檔案名稱: DataFrame} 字典
+        output_path: 輸出圖片路徑
+        title: 圖表標題
+    """
+    if not data_dict:
+        print("沒有資料可繪製")
+        return
+    
+    # 檢查是否有速度資料
+    has_speed = any("speed_mm_s" in df.columns for df in data_dict.values())
+    if not has_speed:
+        print("CSV 檔案中沒有 speed_mm_s 欄位，跳過簡化速度比較圖")
+        return
+    
+    # 創建長方形圖表
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10), constrained_layout=True)
+    
+    # 設定顏色循環
+    colors = plt.cm.tab10.colors
+    
+    # 繪製每條軌跡的速度
+    for i, (name, df) in enumerate(data_dict.items()):
+        if "speed_mm_s" not in df.columns or "t_s" not in df.columns:
+            continue
+        
+        t = df["t_s"].to_numpy()
+        speed = df["speed_mm_s"].to_numpy()
+        
+        # 轉換為相對時間（從 0 開始）
+        valid = np.isfinite(t) & np.isfinite(speed)
+        t_valid = t[valid]
+        speed_valid = speed[valid]
+        
+        if len(t_valid) > 0:
+            t_relative = t_valid - t_valid[0]
+            color = colors[i % len(colors)]
+            
+            # Legend 只顯示檔案名稱
+            ax.plot(t_relative, speed_valid, lw=1.5, color=color, label=name, alpha=0.8)
+    
+    # 設定圖表樣式
+    ax.set_xlabel("Time (s)", fontsize=14)
+    ax.set_ylabel("Speed (mm/s)", fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.legend(loc="upper left", fontsize=14)
+    
+    # 儲存圖表
+    fig.savefig(output_path, dpi=220, bbox_inches='tight')
+    plt.close(fig)
+    print(f"✓ 簡化速度比較圖已儲存: {output_path}")
 
 
 def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Comparison"):
@@ -444,6 +558,10 @@ def main():
     # 繪製速度比較圖
     speed_output = os.path.join(output_folder, "speed_comparison.png")
     plot_multi_speed_comparison(data_dict, speed_output, title="Speed Comparison")
+    
+    # 繪製簡化速度比較圖（正方形，legend 只顯示檔案名稱）
+    speed_simple_output = os.path.join(output_folder, "speed_comparison_simple.png")
+    plot_multi_speed_simple(data_dict, speed_simple_output, title="Speed Comparison")
     
     # 繪製角度比較圖
     angle_output = os.path.join(output_folder, "orientation_comparison.png")

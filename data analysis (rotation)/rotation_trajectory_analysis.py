@@ -37,6 +37,9 @@ SAVGOL_WINDOW = 11  # Savitzky-Golay 窗口大小（必須是奇數）
 SAVGOL_POLY_ORDER = 3  # Savitzky-Golay 多項式階數
 MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 
+# 啟動偵測參數
+MOTION_START_THRESHOLD = 5.0  # 角速度閾值（°/s），超過此值視為開始運動
+
 
 def smooth_data(data, method="savgol"):
     """
@@ -219,9 +222,31 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
     print(f"\n✓ 位置圖表已儲存: {output_path}")
 
 
+def detect_motion_start(angular_vel, threshold=MOTION_START_THRESHOLD):
+    """
+    偵測運動開始的時間點索引
+    
+    Args:
+        angular_vel: 角速度陣列
+        threshold: 角速度閾值（°/s）
+    
+    Returns:
+        運動開始的索引位置
+    """
+    # 使用滑動窗口來避免噪音干擾
+    window_size = 5
+    for i in range(len(angular_vel) - window_size):
+        # 檢查連續幾個點的角速度是否都超過閾值
+        window = angular_vel[i:i + window_size]
+        if np.mean(np.abs(window)) > threshold:
+            return i
+    return 0  # 如果沒有找到，返回起始點
+
+
 def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Comparison"):
     """
     繪製多軌跡角度比較圖（角度 vs 時間）
+    排除靜止期間，從運動開始時計算
     
     Args:
         data_dict: {檔案名稱: DataFrame} 字典
@@ -238,8 +263,8 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         print("CSV 檔案中沒有 angle_deg_unwrapped 欄位，跳過角度比較圖")
         return
     
-    # 創建圖表
-    fig, ax = plt.subplots(1, 1, figsize=(12, 6), constrained_layout=True)
+    # 創建圖表 - 圖片大小改為 12*10
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10), constrained_layout=True)
     
     # 設定顏色循環
     colors = plt.cm.tab10.colors
@@ -252,33 +277,54 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         t = df["t_s"].to_numpy()
         angle = df["angle_deg_unwrapped"].to_numpy()
         
-        # 轉換為相對時間（從 0 開始）
+        # 過濾無效值
         valid = np.isfinite(t) & np.isfinite(angle)
         t_valid = t[valid]
         angle_valid = angle[valid]
         
-        if len(t_valid) > 0:
-            t_relative = t_valid - t_valid[0]
-            # 將角度轉換為相對角度（從 0 開始）
-            angle_relative = angle_valid - angle_valid[0]
-            color = colors[i % len(colors)]
-            
-            # 計算統計資訊
+        if len(t_valid) == 0:
+            continue
+        
+        # 轉換為相對時間（從 0 開始）- 顯示完整資料
+        t_relative = t_valid - t_valid[0]
+        # 將角度轉換為相對角度（從 0 開始）
+        angle_relative = angle_valid - angle_valid[0]
+        
+        # 偵測運動開始時間點（僅用於統計計算）
+        motion_start_idx = 0
+        if "angular_vel_dps" in df.columns:
+            angular_vel = df["angular_vel_dps"].to_numpy()
+            angular_vel_valid = angular_vel[valid]
+            if len(angular_vel_valid) > 0:
+                motion_start_idx = detect_motion_start(angular_vel_valid)
+                print(f"  {name}: 偵測到運動開始於索引 {motion_start_idx} (時間 {t_relative[motion_start_idx]:.2f}s)")
+        
+        color = colors[i % len(colors)]
+        
+        # 計算統計資訊（僅計算運動期間，不包含靜止時間）
+        if motion_start_idx < len(angle_relative):
+            # 從運動開始到結束的角度變化
+            total_rotation = angle_relative[-1] - angle_relative[motion_start_idx]
+            # 運動期間的持續時間
+            motion_duration = t_relative[-1] - t_relative[motion_start_idx]
+            avg_angular_vel = total_rotation / motion_duration if motion_duration > 0 else 0
+        else:
             total_rotation = angle_relative[-1] if len(angle_relative) > 0 else 0
             duration = t_relative[-1] if len(t_relative) > 0 else 1
             avg_angular_vel = total_rotation / duration if duration > 0 else 0
-            
-            # 構建 legend 標籤（包含統計資訊）
-            label = f"{name} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
-            
-            ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
+        
+        # 構建 legend 標籤（包含統計資訊 - 僅運動期間）
+        label = f"{name} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
+        
+        # 繪製完整資料（包含靜止部分）
+        ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=12)
     ax.set_ylabel("Relative Angle (deg)", fontsize=12)
     ax.set_title(title, fontsize=14)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=9)
+    ax.legend(loc="best", fontsize=18)  # legend 字體改為 16
     
     # 儲存圖表
     fig.savefig(output_path, dpi=220, bbox_inches='tight')
