@@ -38,7 +38,7 @@ SAVGOL_POLY_ORDER = 3  # Savitzky-Golay 多項式階數
 MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 
 # 啟動偵測參數
-MOTION_START_THRESHOLD = 5.0  # 角速度閾值（°/s），超過此值視為開始運動
+MOTION_START_THRESHOLD = 10.0  # 角速度閾值（°/s），超過此值視為開始運動
 
 
 def smooth_data(data, method="savgol"):
@@ -121,7 +121,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
         return
     
     # 創建圖表
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10), constrained_layout=True)
+    fig, ax = plt.subplots(1, 1, figsize=(9, 9))
     
     # 設定顏色循環
     colors = plt.cm.tab10.colors  # 使用 tab10 色盤
@@ -205,19 +205,23 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
     
     # 設定圖表樣式
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("x (mm)", fontsize=12)
-    ax.set_ylabel("y (mm)", fontsize=12)
-    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("x (mm)", fontsize=20, labelpad=15)
+    ax.set_ylabel("y (mm)", fontsize=20, labelpad=15)
+    ax.set_title(title, fontsize=22, pad=20)
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=9)
+    ax.legend(loc="best", fontsize=14)
     
     # 添加圖例說明
     smooth_info = f" (Smoothed: {SMOOTHING_METHOD})" if SMOOTHING_ENABLED else ""
     ax.annotate(f"○ = Start, □ = End{smooth_info}", xy=(0.02, 0.02), xycoords='axes fraction',
-                fontsize=9, color='gray')
+                fontsize=12, color='gray')
+    
+    # 調整佈局以增加留白
+    plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight')
+    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"\n✓ 位置圖表已儲存: {output_path}")
 
@@ -263,8 +267,8 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         print("CSV 檔案中沒有 angle_deg_unwrapped 欄位，跳過角度比較圖")
         return
     
-    # 創建圖表 - 圖片大小改為 12*10
-    fig, ax = plt.subplots(1, 1, figsize=(12, 10), constrained_layout=True)
+    # 創建圖表
+    fig, ax = plt.subplots(1, 1, figsize=(11, 8))
     
     # 設定顏色循環
     colors = plt.cm.tab10.colors
@@ -320,14 +324,18 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
-    ax.set_xlabel("Time (s)", fontsize=12)
-    ax.set_ylabel("Relative Angle (deg)", fontsize=12)
-    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("Time (s)", fontsize=20, labelpad=15)
+    ax.set_ylabel("Relative Angle (deg)", fontsize=20, labelpad=15)
+    ax.set_title(title, fontsize=22, pad=20)
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=18)  # legend 字體改為 16
+    ax.legend(loc="best", fontsize=14)
+    
+    # 調整佈局以增加留白
+    plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight')
+    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角度 vs 時間圖表已儲存: {output_path}")
 
@@ -352,7 +360,7 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
         return
     
     # 創建圖表
-    fig, ax = plt.subplots(1, 1, figsize=(12, 6), constrained_layout=True)
+    fig, ax = plt.subplots(1, 1, figsize=(11, 7.5))
     
     # 設定顏色循環
     colors = plt.cm.tab10.colors
@@ -384,17 +392,21 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
             ax.plot(t_relative, angular_vel_valid, lw=1.5, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
-    ax.set_xlabel("Time (s)", fontsize=12)
-    ax.set_ylabel("Angular Velocity (°/s)", fontsize=12)
-    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("Time (s)", fontsize=20, labelpad=15)
+    ax.set_ylabel("Angular Velocity (°/s)", fontsize=20, labelpad=15)
+    ax.set_title(title, fontsize=22, pad=20)
+    ax.tick_params(axis='both', which='major', labelsize=16)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=9)
+    ax.legend(loc="best", fontsize=14)
     
     # 添加零線
     ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5, alpha=0.5)
     
+    # 調整佈局以增加留白
+    plt.tight_layout(pad=2.0)
+    
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight')
+    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角速度比較圖已儲存: {output_path}")
 
