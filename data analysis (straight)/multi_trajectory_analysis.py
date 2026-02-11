@@ -266,7 +266,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison")
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"\n✓ 圖表已儲存: {output_path}")
 
@@ -338,7 +338,7 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 速度比較圖已儲存: {output_path}")
 
@@ -400,7 +400,7 @@ def plot_multi_speed_simple(data_dict, output_path, title="Speed Comparison (Sim
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 簡化速度比較圖已儲存: {output_path}")
 
@@ -469,7 +469,7 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角度比較圖已儲存: {output_path}")
 

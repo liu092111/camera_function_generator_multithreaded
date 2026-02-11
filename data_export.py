@@ -247,14 +247,13 @@ def generate_plots(df, output_dir, OUT_PREFIX):
     if INVERT_Y_AXIS:
         ax_pos.invert_yaxis()
     ax_pos.set_aspect("equal", adjustable="box")
-    ax_pos.set_xlabel("x (mm)")
-    ax_pos.set_ylabel("y (mm)")
-    ax_pos.set_title("Position")
-    ax_pos.grid(True, linestyle="--", alpha=0.4)
-    ax_pos.legend(loc="best")
+    ax_pos.set_xlabel("x (mm)", fontsize=24)
+    ax_pos.set_ylabel("y (mm)", fontsize=24)
+    ax_pos.set_title("Position", fontsize=22)
+    ax_pos.legend(loc="best", fontsize=14)
     
     plot_pos_path = os.path.join(output_dir, f"{OUT_PREFIX}_position.png")
-    figA.savefig(plot_pos_path, dpi=220)
+    figA.savefig(plot_pos_path, dpi=1200)
     plt.close(figA)
     plot_paths['position'] = plot_pos_path
     
@@ -271,11 +270,10 @@ def generate_plots(df, output_dir, OUT_PREFIX):
             i_max = np.nanargmax(sp_all)
             ax_s.plot([tt[i_max]], [sp_all[i_max]], marker="o", markersize=8, color="red",
                      label=f"Max: {sp_all[i_max]:.2f} mm/s @ {tt[i_max]:.2f}s")
-        ax_s.set_xlabel("Time (s)")
-        ax_s.set_ylabel("Speed (mm/s)")
-        ax_s.set_title("Speed vs Time")
-        ax_s.grid(True, linestyle="--", alpha=0.4)
-        ax_s.legend(loc="best")
+        ax_s.set_xlabel("Time (s)", fontsize=24)
+        ax_s.set_ylabel("Speed (mm/s)", fontsize=24)
+        ax_s.set_title("Speed vs Time", fontsize=22)
+        ax_s.legend(loc="best", fontsize=14)
         
         # 右圖：角度
         if ORIENT_PLOT_WRAPPED:
@@ -294,17 +292,16 @@ def generate_plots(df, output_dir, OUT_PREFIX):
         label_orient = (f"Orientation (deg)\nAvg offset: {avg_offset_deg:.2f}°" 
                        if np.isfinite(avg_offset_deg) else "Orientation (deg)")
         ax_a.plot(df["t_s"], ang_vis, lw=2, label=label_orient)
-        ax_a.set_xlabel("Time (s)")
-        ax_a.set_ylabel("Angle (deg)")
-        ax_a.set_title("Orientation vs Time")
+        ax_a.set_xlabel("Time (s)", fontsize=24)
+        ax_a.set_ylabel("Angle (deg)", fontsize=24)
+        ax_a.set_title("Orientation vs Time", fontsize=22)
         if ORIENT_YLIM_DEG is not None and np.isfinite(ORIENT_YLIM_DEG):
             ylim = float(ORIENT_YLIM_DEG)
             ax_a.set_ylim(-ylim, +ylim)
-        ax_a.grid(True, linestyle="--", alpha=0.4)
-        ax_a.legend(loc="best")
+        ax_a.legend(loc="best", fontsize=14)
         
         plot_so_path = os.path.join(output_dir, f"{OUT_PREFIX}_speed_orientation.png")
-        figB.savefig(plot_so_path, dpi=220)
+        figB.savefig(plot_so_path, dpi=1200)
         plt.close(figB)
         plot_paths['speed_orientation'] = plot_so_path
         
@@ -320,16 +317,15 @@ def generate_plots(df, output_dir, OUT_PREFIX):
         if np.any(finite_ang):
             valid_angles = ang_plot[finite_ang]
             total_rotation = valid_angles[-1] - valid_angles[0]
-            ax_theta.set_title(f"Angle vs Time (Total rotation: {total_rotation:.1f}°)")
+            ax_theta.set_title(f"Angle vs Time (Total rotation: {total_rotation:.1f}°)", fontsize=22)
         else:
-            ax_theta.set_title("Angle vs Time")
+            ax_theta.set_title("Angle vs Time", fontsize=22)
         
-        ax_theta.set_xlabel("Time (s)")
-        ax_theta.set_ylabel("Angle (deg)")
-        ax_theta.grid(True, linestyle="--", alpha=0.4)
+        ax_theta.set_xlabel("Time (s)", fontsize=24)
+        ax_theta.set_ylabel("Angle (deg)", fontsize=24)
         
         plot_theta_path = os.path.join(output_dir, f"{OUT_PREFIX}_angle.png")
-        fig_theta.savefig(plot_theta_path, dpi=220)
+        fig_theta.savefig(plot_theta_path, dpi=1200)
         plt.close(fig_theta)
         plot_paths['angle'] = plot_theta_path
         
@@ -341,16 +337,15 @@ def generate_plots(df, output_dir, OUT_PREFIX):
         finite = np.isfinite(w_all)
         if np.any(finite):
             mean_vel = np.nanmean(w_all)
-            ax_w.set_title(f"Angular Speed vs Time (Mean: {mean_vel:.2f} deg/s)")
+            ax_w.set_title(f"Angular Speed vs Time (Mean: {mean_vel:.2f} deg/s)", fontsize=22)
         else:
-            ax_w.set_title("Angular Speed vs Time")
+            ax_w.set_title("Angular Speed vs Time", fontsize=22)
         
-        ax_w.set_xlabel("Time (s)")
-        ax_w.set_ylabel("Angular speed (deg/s)")
-        ax_w.grid(True, linestyle="--", alpha=0.4)
+        ax_w.set_xlabel("Time (s)", fontsize=24)
+        ax_w.set_ylabel("Angular speed (deg/s)", fontsize=24)
         
         plot_w_path = os.path.join(output_dir, f"{OUT_PREFIX}_angular_speed.png")
-        fig_w.savefig(plot_w_path, dpi=220)
+        fig_w.savefig(plot_w_path, dpi=1200)
         plt.close(fig_w)
         plot_paths['angular_speed'] = plot_w_path
     
@@ -453,14 +448,13 @@ def generate_trajectory_and_composite(df, box_rec, output_dir, OUT_PREFIX, mm_pe
         ax_contour.invert_yaxis()
     
     ax_contour.set_aspect("equal", adjustable="box")
-    ax_contour.set_xlabel("x (mm)")
-    ax_contour.set_ylabel("y (mm)")
-    ax_contour.set_title(f"Position with Time Points")
-    ax_contour.grid(True, linestyle="--", alpha=0.4)
-    ax_contour.legend(loc="best")
+    ax_contour.set_xlabel("x (mm)", fontsize=24)
+    ax_contour.set_ylabel("y (mm)", fontsize=24)
+    ax_contour.set_title(f"Position with Time Points", fontsize=22)
+    ax_contour.legend(loc="best", fontsize=14)
     
     plot_contour_path = os.path.join(output_dir, f"{OUT_PREFIX}_timepoint_position.png")
-    figC.savefig(plot_contour_path, dpi=220)
+    figC.savefig(plot_contour_path, dpi=1200)
     plt.close(figC)
     plot_paths['trajectory_contour'] = plot_contour_path
     

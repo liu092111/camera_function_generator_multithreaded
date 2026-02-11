@@ -205,11 +205,11 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
     
     # 設定圖表樣式
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("x (mm)", fontsize=20, labelpad=15)
-    ax.set_ylabel("y (mm)", fontsize=20, labelpad=15)
+    ax.set_xlabel("x (mm)", fontsize=24, labelpad=15)
+    ax.set_ylabel("y (mm)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
-    ax.grid(True, linestyle="--", alpha=0.4)
+    #ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="best", fontsize=14)
     
     # 添加圖例說明
@@ -221,7 +221,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"\n✓ 位置圖表已儲存: {output_path}")
 
@@ -324,18 +324,18 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
-    ax.set_xlabel("Time (s)", fontsize=20, labelpad=15)
-    ax.set_ylabel("Relative Angle (deg)", fontsize=20, labelpad=15)
+    ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
+    ax.set_ylabel("Relative Angle (deg)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
-    ax.grid(True, linestyle="--", alpha=0.4)
+    #ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="best", fontsize=14)
     
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角度 vs 時間圖表已儲存: {output_path}")
 
@@ -392,11 +392,11 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
             ax.plot(t_relative, angular_vel_valid, lw=1.5, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
-    ax.set_xlabel("Time (s)", fontsize=20, labelpad=15)
-    ax.set_ylabel("Angular Velocity (°/s)", fontsize=20, labelpad=15)
+    ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
+    ax.set_ylabel("Angular Velocity (°/s)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
-    ax.grid(True, linestyle="--", alpha=0.4)
+    #ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="best", fontsize=14)
     
     # 添加零線
@@ -406,7 +406,7 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
     plt.tight_layout(pad=2.0)
     
     # 儲存圖表
-    fig.savefig(output_path, dpi=220, bbox_inches='tight', pad_inches=0.3)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角速度比較圖已儲存: {output_path}")
 

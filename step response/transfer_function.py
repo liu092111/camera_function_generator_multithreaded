@@ -259,15 +259,14 @@ def main():
         all_results.append(f"\nPID Controller: Error - {e}")
     
     # Plot formatting
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.xlabel('Time (s)', fontsize=12)
-    plt.ylabel('Angle (degree)', fontsize=12)
-    plt.title('System Identification of Step Response', fontsize=14)
-    plt.legend(loc='best', fontsize=10)
+    plt.xlabel('Time (s)', fontsize=24)
+    plt.ylabel('Angle (degree)', fontsize=24)
+    plt.title('System Identification of Step Response', fontsize=22)
+    plt.legend(loc='best', fontsize=14)
     plt.tight_layout()
     
     # Save figure
-    plt.savefig('step_response_with_controllers_optimized.png', dpi=150)
+    plt.savefig('step_response_with_controllers_optimized.png', dpi=1200)
     plt.show()
     
     # Save results to txt file
