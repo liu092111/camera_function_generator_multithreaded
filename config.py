@@ -7,7 +7,7 @@
 import numpy as np
 
 # ========== 攝影機設定 ==========
-MODE = "straight"  # "straight" 或 "rotation"
+MODE = "rotation"  # "straight" 或 "rotation"
 CAMERA_INDEX = 1
 CAM_WIDTH = 640    # 攝影機解析度寬度
 CAM_HEIGHT = 480   # 攝影機解析度高度
@@ -27,7 +27,7 @@ FLIP_VERTICAL = True     # 垂直翻轉（上下翻轉），修正 device 移動
 FLIP_HORIZONTAL = True  # 水平翻轉（左右翻轉）
 
 # 統一電壓設定（V)
-VOLTAGE = 1.5
+VOLTAGE = 1.1
 
 # ========== PID 控制設定 ==========
 ENABLE_PID_CONTROL = False  # 是否啟用 PID 控制
