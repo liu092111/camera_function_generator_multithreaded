@@ -20,7 +20,8 @@ os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'  # 抑制 OpenCV 訊息
 
 import cv2
 # 抑制 OpenCV C++ 層級的警告
-cv2.setLogLevel(0)  # 0 = LOG_LEVEL_SILENT
+if hasattr(cv2, 'setLogLevel'):
+    cv2.setLogLevel(0)  # 0 = LOG_LEVEL_SILENT
 import time
 import threading
 import queue
