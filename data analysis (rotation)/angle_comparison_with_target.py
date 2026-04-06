@@ -246,11 +246,9 @@ def plot_angle_comparison_with_target(data_dict, output_path,
         duration = t_relative[-1] if len(t_relative) > 0 else 1
         avg_angular_vel = total_rotation / duration if duration > 0 else 0
 
-        # 構建 legend 標籤
-        label = f"{name} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
-
         # 繪製完整資料
-        ax.plot(t_relative, angle_relative, lw=3, color=color, label=label, alpha=0.8)
+        exp_label = f"Experiment (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
+        ax.plot(t_relative, angle_relative, lw=3, color=color, label=exp_label, alpha=0.8, zorder=3)
 
     # 決定 step 起跳時間
     if STEP_START_TIME is not None:
@@ -267,14 +265,15 @@ def plot_angle_comparison_with_target(data_dict, output_path,
     t_target = np.array([0, step_time - 1e-6, step_time, max_time])
     angle_target = np.array([0, 0, TARGET_ANGLE, TARGET_ANGLE])
     ax.plot(t_target, angle_target, lw=2.5, color='red', linestyle='-',
-            label=f"Target ({TARGET_ANGLE:.1f}°)", alpha=0.9, zorder=10)
+            label="Target", alpha=0.9, zorder=1)
 
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
     ax.set_ylabel("Relative Angle (deg)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
-    ax.legend(loc="best", fontsize=14)
+    leg = ax.legend(loc="best", fontsize=14, framealpha=1)
+    leg.set_zorder(10)
 
     # 調整佈局
     plt.tight_layout(pad=2.0)

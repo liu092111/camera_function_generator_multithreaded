@@ -182,7 +182,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
             label = name
         
         # 繪製平滑後的軌跡
-        ax.plot(x_smooth, y_smooth, lw=2, color=color, label=label, alpha=0.8)
+        ax.plot(x_smooth, y_smooth, lw=3, color=color, label=label, alpha=0.8)
         
         # 標記起點（使用原始資料的第一點）
         ax.scatter([x_valid[0]], [y_valid[0]], s=80, color=color, 
@@ -321,7 +321,7 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
         label = f"{name} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
         
         # 繪製完整資料（包含靜止部分）
-        ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
+        ax.plot(t_relative, angle_relative, lw=3, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
@@ -389,7 +389,7 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
             # 構建 legend 標籤（包含統計資訊）
             label = f"{name} (Avg={avg_angular_vel:.1f}, Max={max_angular_vel:.1f} °/s)"
             
-            ax.plot(t_relative, angular_vel_valid, lw=1.5, color=color, label=label, alpha=0.8)
+            ax.plot(t_relative, angular_vel_valid, lw=3, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
