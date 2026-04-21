@@ -227,7 +227,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison")
             label = name
         
         # 繪製平滑後的軌跡
-        ax.plot(x_smooth, y_smooth, lw=2, color=color, label=label, alpha=0.8)
+        ax.plot(x_smooth, y_smooth, lw=3, color=color, label=label, alpha=0.8)
         
         # 標記起點（使用原始資料的第一點）
         ax.scatter([x_valid[0]], [y_valid[0]], s=80, color=color, 
@@ -320,7 +320,7 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
             # 構建 legend 標籤（包含統計資訊）
             label = f"{name} (Avg={avg_speed:.1f}, Max={max_speed:.1f} mm/s)"
             
-            ax.plot(t_relative, speed_valid, lw=1.5, color=color, label=label, alpha=0.8)
+            ax.plot(t_relative, speed_valid, lw=3, color=color, label=label, alpha=0.8)
             
             # 標記啟動時間點
             if startup_idx > 0:
@@ -386,7 +386,7 @@ def plot_multi_speed_simple(data_dict, output_path, title="Speed Comparison (Sim
             color = colors[i % len(colors)]
             
             # Legend 只顯示檔案名稱
-            ax.plot(t_relative, speed_valid, lw=1.5, color=color, label=name, alpha=0.8)
+            ax.plot(t_relative, speed_valid, lw=3, color=color, label=name, alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
@@ -455,13 +455,16 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
             # 構建 legend 標籤（包含統計資訊）
             label = f"{name} (Avg Offset = {avg_offset:.2f}°)"
             
-            ax.plot(t_relative, angle_relative, lw=1.5, color=color, label=label, alpha=0.8)
+            ax.plot(t_relative, angle_relative, lw=3, color=color, label=label, alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
     ax.set_ylabel("Relative Angle (deg)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
+    # Y 軸以 5 度為一個單位
+    from matplotlib.ticker import MultipleLocator
+    ax.yaxis.set_major_locator(MultipleLocator(5))
     #ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="best", fontsize=14)
     
@@ -472,6 +475,164 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
     fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角度比較圖已儲存: {output_path}")
+
+
+def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory Deviation from Vertical"):
+    """
+    繪製多軌跡相對於垂直線的偏移比較圖（三個子圖）
+    
+    假設起始點預設走垂直方向 (y 軸方向)，計算：
+    1. 瞬時行進方向 (heading) 相對於垂直軸的偏移角度（每步的速度方向）
+    2. 累積偏移角度（從起點到當前位置的連線 vs 垂直軸）
+    3. 橫向偏移量 vs 縱向行走距離
+    
+    Args:
+        data_dict: {檔案名稱: DataFrame} 字典
+        output_path: 輸出圖片路徑
+        title: 圖表標題
+    """
+    if not data_dict:
+        print("沒有資料可繪製")
+        return
+    
+    # 創建三個子圖
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(11, 18), gridspec_kw={'height_ratios': [1, 1, 1]})
+    
+    # 設定顏色循環
+    colors = plt.cm.tab10.colors
+    
+    for i, (name, df) in enumerate(data_dict.items()):
+        if "x_mm" not in df.columns or "y_mm" not in df.columns:
+            continue
+        
+        x = df["x_mm"].to_numpy()
+        y = df["y_mm"].to_numpy()
+        
+        # 過濾無效值
+        valid = np.isfinite(x) & np.isfinite(y)
+        x_valid = x[valid]
+        y_valid = y[valid]
+        
+        if len(x_valid) < 2:
+            continue
+        
+        # 應用平滑濾波
+        x_smooth = smooth_data(x_valid, SMOOTHING_METHOD)
+        y_smooth = smooth_data(y_valid, SMOOTHING_METHOD)
+        
+        # 起始位置
+        x0 = x_smooth[0]
+        y0 = y_smooth[0]
+        
+        # ====== 計算瞬時行進方向 (heading) 相對於垂直軸的偏移 ======
+        # 每一步的位移差
+        step_dx = np.diff(x_smooth)
+        step_dy = np.diff(y_smooth)
+        step_dist = np.sqrt(step_dx**2 + step_dy**2)
+        
+        # 瞬時 heading 偏移角度：arctan2(dx, dy)，垂直走為 0°
+        instant_heading = np.full_like(step_dx, np.nan)
+        significant_step = step_dist > 1e-6  # 避免靜止時的雜訊
+        if np.any(significant_step):
+            instant_heading[significant_step] = np.degrees(
+                np.arctan2(step_dx[significant_step], step_dy[significant_step])
+            )
+        
+        # ====== 計算累積偏移角度（起點到當前位置 vs 垂直線）======
+        dx_cumul = x_smooth - x0
+        dy_cumul = y_smooth - y0
+        y_distance = np.abs(dy_cumul)
+        
+        cumul_deviation = np.full_like(dx_cumul, np.nan)
+        significant_move = y_distance > 0.01
+        if np.any(significant_move):
+            cumul_deviation[significant_move] = np.degrees(
+                np.arctan2(dx_cumul[significant_move], dy_cumul[significant_move])
+            )
+        
+        # 取得時間軸
+        if "t_s" in df.columns:
+            t = df["t_s"].to_numpy()
+            t_valid = t[valid]
+            t_relative = t_valid - t_valid[0]
+        else:
+            t_relative = np.arange(len(x_valid))
+        
+        # heading 的時間軸（取中點）
+        t_heading = 0.5 * (t_relative[:-1] + t_relative[1:])
+        
+        color = colors[i % len(colors)]
+        
+        # 計算統計量
+        valid_heading = instant_heading[np.isfinite(instant_heading)]
+        valid_cumul = cumul_deviation[np.isfinite(cumul_deviation)]
+        
+        # heading 統計
+        if len(valid_heading) > 0:
+            avg_heading = np.mean(valid_heading)
+            label_heading = f"{name} (Avg={avg_heading:.2f}°)"
+        else:
+            label_heading = name
+        
+        # 累積偏移統計
+        if len(valid_cumul) > 0:
+            avg_cumul = np.mean(np.abs(valid_cumul))
+            label_cumul = f"{name} (Avg |θ|={avg_cumul:.2f}°)"
+        else:
+            label_cumul = name
+        
+        # 橫向偏移統計
+        final_lateral_offset = dx_cumul[-1]
+        label_lateral = f"{name} (Final offset={final_lateral_offset:.3f} mm)"
+        
+        # --- 子圖 1: 瞬時 heading 偏移角度 vs 時間 ---
+        valid_h = np.isfinite(instant_heading)
+        if np.any(valid_h):
+            ax1.plot(t_heading[valid_h], instant_heading[valid_h],
+                     lw=1.5, color=color, label=label_heading, alpha=0.8)
+        
+        # --- 子圖 2: 累積偏移角度 vs 時間 ---
+        valid_c = np.isfinite(cumul_deviation)
+        if np.any(valid_c):
+            ax2.plot(t_relative[valid_c], cumul_deviation[valid_c],
+                     lw=1.5, color=color, label=label_cumul, alpha=0.8)
+        
+        # --- 子圖 3: 橫向偏移 (x) vs 縱向位移 (y) ---
+        ax3.plot(y_distance, dx_cumul, lw=1.5, color=color, label=label_lateral, alpha=0.8)
+    
+    # --- 設定子圖 1 樣式 (瞬時 heading) ---
+    ax1.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
+    ax1.set_xlabel("Time (s)", fontsize=20, labelpad=12)
+    ax1.set_ylabel("Instantaneous Heading (°)", fontsize=20, labelpad=12)
+    ax1.set_title("Instantaneous Heading Deviation from Vertical", fontsize=20, pad=15)
+    ax1.tick_params(axis='both', which='major', labelsize=14)
+    ax1.legend(loc="best", fontsize=12)
+    ax1.annotate("0° = Moving vertically, + = Right, − = Left", xy=(0.02, 0.02),
+                 xycoords='axes fraction', fontsize=11, color='gray')
+    
+    # --- 設定子圖 2 樣式 (累積偏移) ---
+    ax2.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
+    ax2.set_xlabel("Time (s)", fontsize=20, labelpad=12)
+    ax2.set_ylabel("Cumulative Deviation Angle (°)", fontsize=20, labelpad=12)
+    ax2.set_title("Cumulative Direction from Start vs Vertical", fontsize=20, pad=15)
+    ax2.tick_params(axis='both', which='major', labelsize=14)
+    ax2.legend(loc="best", fontsize=12)
+    
+    # --- 設定子圖 3 樣式 (橫向偏移) ---
+    ax3.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
+    ax3.set_xlabel("Vertical Distance Traveled (mm)", fontsize=20, labelpad=12)
+    ax3.set_ylabel("Lateral Offset (mm)", fontsize=20, labelpad=12)
+    ax3.set_title("Lateral Drift vs Vertical Travel Distance", fontsize=20, pad=15)
+    ax3.tick_params(axis='both', which='major', labelsize=14)
+    ax3.legend(loc="best", fontsize=12)
+    
+    # 調整佈局
+    plt.tight_layout(pad=2.5)
+    
+    # 儲存圖表
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
+    plt.close(fig)
+    print(f"✓ 軌跡偏移比較圖已儲存: {output_path}")
 
 
 def print_statistics(data_dict):
@@ -524,6 +685,19 @@ def print_statistics(data_dict):
             if len(angle_valid) > 1:
                 total_rotation = angle_valid[-1] - angle_valid[0]
                 print(f"  - 總旋轉: {total_rotation:.2f}°")
+        
+        # 軌跡偏移統計（相對於垂直線）
+        if len(x_valid) > 1:
+            x_smooth = smooth_data(x_valid, SMOOTHING_METHOD)
+            y_smooth = smooth_data(y_valid, SMOOTHING_METHOD)
+            dx_total = x_smooth[-1] - x_smooth[0]
+            dy_total = y_smooth[-1] - y_smooth[0]
+            y_dist = np.abs(dy_total)
+            if y_dist > 0.01:
+                deviation_angle = np.degrees(np.arctan2(dx_total, dy_total))
+                print(f"  - 軌跡偏移角度 (相對垂直): {deviation_angle:.2f}°")
+                print(f"  - 橫向偏移量: {dx_total:.4f} mm")
+                print(f"  - 縱向位移量: {dy_total:.4f} mm")
         
         # 時間統計
         if "t_s" in df.columns:
