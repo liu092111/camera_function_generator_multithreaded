@@ -8,7 +8,7 @@ import numpy as np
 
 # ========== 攝影機設定 ==========
 MODE = "rotation"  # "straight" 或 "rotation"
-CAMERA_INDEX = 1
+CAMERA_INDEX = 0
 CAM_WIDTH = 640    # 攝影機解析度寬度
 CAM_HEIGHT = 480   # 攝影機解析度高度
 CAM_FPS_REQ = 120  # 目標 FPS

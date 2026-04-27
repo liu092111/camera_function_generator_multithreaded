@@ -1,0 +1,47 @@
+====================================================================
+  Mode Switch Impact on Pipeline Throughput
+  Camera: 640x480 @ 120 fps
+  FG: Keysight 33622A via USB-TMC
+  Switches: 20 (10 same-group, 10 cross-group)
+  Frames between switches: 50
+  Total measured frames: 1002
+  Timestamp: 2026-04-27 14:18:37
+====================================================================
+
+[FG Switch Timing — measured from Main Thread]
+  Same-group (polarity):  n=10  mean=8.2 ms  min=3.8 ms  max=36.4 ms
+  Cross-group (waveform): n=10  mean=7.7 ms  min=5.9 ms  max=11.4 ms
+
+[Process Thread Timing — ALL frames]
+  n=1002  mean=2.75 ms  std=0.68 ms  p95=3.74 ms  p99=4.24 ms  max=4.66 ms
+  > 8.33 ms: 0/1002 (0.0%)
+
+[Process Thread Timing — DURING mode switch window]
+  n=124  mean=2.80 ms  std=0.70 ms  p95=3.83 ms  max=4.66 ms
+
+[Process Thread Timing — OUTSIDE mode switch window]
+  n=878  mean=2.75 ms  std=0.68 ms  p95=3.74 ms  max=4.64 ms
+
+[KEY FINDING: Process Thread unaffected by FG switch?]
+  During switch mean:  2.80 ms
+  Outside switch mean: 2.75 ms
+  Difference:          0.05 ms (1.9%)
+  CONCLUSION: Process Thread is NOT affected by FG mode switching.
+              The two run on separate threads with no shared blocking.
+
+[Pipeline Throughput]
+  Frame interval: mean=8.29 ms  std=5.67 ms
+  Effective throughput: 120.6 fps
+  Captured: 1103  Processed: 1102  Dropped: 0
+  Drop rate: 0.0%
+
+====================================================================
+  VERDICT
+====================================================================
+  Process Thread p99 = 4.24 ms < 8.33 ms : PASS
+  Drop rate = 0.0%
+
+  FG mode switching (10-150ms) runs on Main Thread and does NOT
+  block or slow down Process Thread. Pipeline sustains 120 fps
+  throughout mode switches with zero frame drops.
+====================================================================

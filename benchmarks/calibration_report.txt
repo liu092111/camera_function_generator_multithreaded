@@ -1,0 +1,63 @@
+====================================================================
+  Camera Calibration Quality Report
+  Camera: Arducam B0332 OV9281 Monochrome 640x480
+  Method: TPS (Thin Plate Spline) Grid Rectification
+  Grid: 5.0 mm spacing
+  Timestamp: 2026-04-27 14:26:43
+====================================================================
+
+[Source Image]
+  File: C:\Users\liuuhua\Desktop\Git Repository\camera_function_generator_multithreaded\calibration\original.png
+  Size: 640x480 px
+
+[Grid Detection]
+  Intersections detected: 496 (sub-pixel refined)
+  Grid structure: 19 rows x 26 cols = 494 points
+  Estimated spacing: x=21.16 px, y=20.62 px, avg=20.89 px
+  Derived scale: 0.2394 mm/px (5.0 mm grid)
+
+[TPS Fit Quality]
+  Control points: 494 grid + 24 edge anchors = 518 total
+  TPS smooth parameter: 0.1
+  RMS residual (grid points): 0.0003 px (0.0001 mm)
+  Mean residual:              0.0002 px (0.0000 mm)
+  Std residual:               0.0002 px (0.0000 mm)
+  Min residual:               0.0000 px
+  Max residual:               0.0010 px (0.0002 mm)
+  Grade: Excellent (< 0.3 px)
+  Points with residual > 1.0 px: 0
+
+[Post-Rectification Grid Quality]
+  Grid detected: 15x22 = 330 points
+  Mean spacing: dx=20.888 px, dy=20.894 px
+  Spacing consistency: CV_x=0.62%, CV_y=0.62%
+  Line straightness:
+    Horizontal RMS: 0.0740 px (0.0177 mm)
+    Vertical RMS:   0.0697 px (0.0167 mm)
+  Center-edge scale difference: 0.02%
+  Total error index: 1.00%
+  Grade: Excellent (< 2%)
+
+[TPS Distortion Map Statistics]
+  Map shape: 640x480 px
+  Cropped output: 462x314 px
+  Crop margin: 30 px
+  Distortion magnitude:
+    Mean: 32.30 px (7.731 mm)
+    Max:  62.61 px (14.987 mm)
+    Std:  15.23 px
+
+[Visualizations]
+  C:\Users\liuuhua\Desktop\Git Repository\camera_function_generator_multithreaded\benchmarks\calibration_viz/original_detected_points.png
+  C:\Users\liuuhua\Desktop\Git Repository\camera_function_generator_multithreaded\benchmarks\calibration_viz/tps_residual_heatmap.png
+  C:\Users\liuuhua\Desktop\Git Repository\camera_function_generator_multithreaded\benchmarks\calibration_viz/rectified_grid_overlay.png
+  C:\Users\liuuhua\Desktop\Git Repository\camera_function_generator_multithreaded\benchmarks\calibration_viz/before_after_comparison.png
+
+====================================================================
+  CONCLUSION
+====================================================================
+  TPS fit RMS residual: 0.0003 px (Excellent (< 0.3 px))
+  Post-rectification error: 1.00% (Excellent (< 2%))
+  Straightness after correction: H=0.0740 px, V=0.0697 px
+  Meets thesis standard (RMS < 0.5 px): Yes
+====================================================================
