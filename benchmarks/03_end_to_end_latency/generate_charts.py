@@ -1,5 +1,12 @@
-"""03 — End-to-End Latency Benchmark Charts"""
+"""03 — End-to-End Latency Benchmark Charts
 
+Reads: e2e_latency_raw.csv
+Outputs: e2e_gen2_vs_gen3_histogram.png, e2e_process_histogram.png,
+         e2e_round_errorbar.png
+"""
+
+import os
+import glob
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -24,80 +31,113 @@ plt.rcParams.update({
 C1 = '#6b8cae'
 C2 = '#a3c4dc'
 C3 = '#d4a574'
+C4 = '#8fae8f'
+C5 = '#b8a9c9'
 C_GRAY = '#9e9e9e'
-C_BUDGET = '#5a8a5a'
 
 BASE_DIR = Path(__file__).parent
 OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
 def main():
-    df = pd.read_csv(BASE_DIR / "latency_benchmark_raw.csv")
+    clean_output_dir()
 
-    # Chart 1: Sorted total latency
-    sorted_total = np.sort(df['total'].values)
+    csv_path = BASE_DIR / "e2e_latency_raw.csv"
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] {csv_path} not found. Skipping all charts.")
+        return
+
+    df = pd.read_csv(csv_path)
+
+    df_gen3 = df[df['generation'] == 'gen3'].copy()
+    df_gen2 = df[df['generation'] == 'gen2'].copy()
+
+    # Chart 1: Gen-2 vs Gen-3 FG write overlaid histograms
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(np.arange(1, len(sorted_total)+1), sorted_total, '-', color=C1, linewidth=0.8)
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget (8.33ms)')
-    mean_val = df['total'].mean()
-    ax.axhline(y=mean_val, color=C3, linewidth=0.8, linestyle='--',
-               alpha=0.7, label=f'Mean ({mean_val:.1f}ms)')
-    ax.set_xlabel('Frame (sorted by latency)')
-    ax.set_ylabel('End-to-End Latency (ms)')
-    ax.set_title('End-to-End Latency Distribution (n=500)')
-    ax.legend(fontsize=9)
-    savefig(fig, "e2e_sorted_latency.png")
+    if not df_gen3.empty:
+        data_gen3 = df_gen3['fg_write_ms'].dropna().values
+        ax.hist(data_gen3, bins=50, color=C1, alpha=0.6, edgecolor='none',
+                label=f'Gen-3 FG Write (mean={data_gen3.mean():.2f} ms)')
+    if not df_gen2.empty:
+        data_gen2 = df_gen2['fg_write_ms'].dropna().values
+        ax.hist(data_gen2, bins=50, color=C3, alpha=0.6, edgecolor='none',
+                label=f'Gen-2 FG Write (mean={data_gen2.mean():.2f} ms)')
 
-    # Chart 2: Segment sorted individually
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title('FG Write Latency Distribution: Gen-2 vs Gen-3')
+    ax.legend(fontsize=9)
+    savefig(fig, "e2e_gen2_vs_gen3_histogram.png")
+
+    # Chart 2: Histogram of process_ms (Gen-3 data)
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    seg3_sorted = np.sort(df['seg3'].values)
-    seg2_sorted = np.sort(df['seg2'].values)
-    idx = np.arange(1, len(df)+1)
-    ax.plot(idx, seg3_sorted, '-', color=C1, linewidth=0.8,
-            label=f'Main+FG (mean={df["seg3"].mean():.1f}ms)')
-    ax.plot(idx, seg2_sorted, '-', color=C3, linewidth=0.8,
-            label=f'Process+Queue (mean={df["seg2"].mean():.2f}ms)')
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
-    ax.set_xlabel('Frame (sorted independently per segment)')
-    ax.set_ylabel('Latency (ms)')
-    ax.set_title('Latency by Segment (sorted)')
-    ax.legend(fontsize=9)
-    savefig(fig, "e2e_segment_sorted.png")
+    if not df_gen3.empty:
+        data_proc = df_gen3['process_ms'].dropna().values
+        mean_val = data_proc.mean()
+        ax.hist(data_proc, bins=50, color=C1, alpha=0.7, edgecolor='none')
+        ax.axvline(x=mean_val, color=C3, linestyle='--', linewidth=1,
+                   label=f'Mean ({mean_val:.2f} ms)')
 
-    # Chart 3: Time series
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(df['frame_id'], df['total'], '-', color=C1, linewidth=0.5, alpha=0.8)
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget (8.33ms)')
-    ax.set_xlabel('Frame ID')
-    ax.set_ylabel('Latency (ms)')
-    ax.set_title('End-to-End Latency Time Series (500 consecutive frames)')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Process Latency Distribution (Gen-3, n={len(df_gen3)})')
     ax.legend(fontsize=9)
-    savefig(fig, "e2e_timeseries.png")
+    savefig(fig, "e2e_process_histogram.png")
 
-    # Chart 4: CDF
-    fig, ax = plt.subplots(figsize=(6, 4.5))
-    cdf = np.arange(1, len(sorted_total)+1) / len(sorted_total)
-    ax.plot(sorted_total, cdf, '-', color=C1, linewidth=1.5)
-    ax.axvline(x=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
-    p50 = np.percentile(df['total'], 50)
-    p95 = np.percentile(df['total'], 95)
-    ax.axhline(y=0.50, color=C_GRAY, linewidth=0.4, linestyle=':')
-    ax.axhline(y=0.95, color=C_GRAY, linewidth=0.4, linestyle=':')
-    ax.text(sorted_total[-1]*0.55, 0.49, f'P50={p50:.1f}ms', fontsize=8, color=C_GRAY)
-    ax.text(sorted_total[-1]*0.55, 0.94, f'P95={p95:.1f}ms', fontsize=8, color=C_GRAY)
-    ax.set_xlabel('Latency (ms)')
-    ax.set_ylabel('Cumulative Probability')
-    ax.set_title('End-to-End Latency CDF')
+    # Chart 3: Per-round mean +/- std for FG write (Gen-2 and Gen-3 side by side)
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    width = 0.35
+
+    rounds_gen3 = sorted(df_gen3['round'].unique()) if not df_gen3.empty else []
+    rounds_gen2 = sorted(df_gen2['round'].unique()) if not df_gen2.empty else []
+    all_rounds = sorted(set(rounds_gen3) | set(rounds_gen2))
+    x_pos = np.arange(len(all_rounds))
+
+    # Gen-3
+    means_gen3 = []
+    stds_gen3 = []
+    for rnd in all_rounds:
+        rnd_data = df_gen3[df_gen3['round'] == rnd]['fg_write_ms']
+        means_gen3.append(rnd_data.mean() if not rnd_data.empty else 0)
+        stds_gen3.append(rnd_data.std() if not rnd_data.empty else 0)
+
+    # Gen-2
+    means_gen2 = []
+    stds_gen2 = []
+    for rnd in all_rounds:
+        rnd_data = df_gen2[df_gen2['round'] == rnd]['fg_write_ms']
+        means_gen2.append(rnd_data.mean() if not rnd_data.empty else 0)
+        stds_gen2.append(rnd_data.std() if not rnd_data.empty else 0)
+
+    ax.errorbar(x_pos - width / 2, means_gen3, yerr=stds_gen3, fmt='o',
+                color=C1, ecolor=C2, capsize=4, markersize=6,
+                elinewidth=1.5, capthick=1.2, label='Gen-3')
+    ax.errorbar(x_pos + width / 2, means_gen2, yerr=stds_gen2, fmt='s',
+                color=C3, ecolor=C5, capsize=4, markersize=6,
+                elinewidth=1.5, capthick=1.2, label='Gen-2')
+
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([f'R{r}' for r in all_rounds])
+    ax.set_xlabel('Round')
+    ax.set_ylabel('FG Write Time (ms)')
+    ax.set_title('FG Write Latency Per Round: Gen-2 vs Gen-3')
     ax.legend(fontsize=9)
-    savefig(fig, "e2e_cdf.png")
+    savefig(fig, "e2e_round_errorbar.png")
 
-    print("Done: 4 figures in", OUT_DIR)
+    print(f"Done: 3 charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':

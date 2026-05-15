@@ -1,6 +1,14 @@
-"""05 — Pipeline Throughput Benchmark Charts"""
+"""05 — Pipeline Throughput Benchmark Charts
 
+Reads: throughput_raw.csv
+Outputs: throughput_process_histogram.png, throughput_round_fps.png,
+         throughput_timeline.png
+"""
+
+import os
+import glob
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -21,63 +29,85 @@ plt.rcParams.update({
 })
 
 C1 = '#6b8cae'
+C2 = '#a3c4dc'
 C3 = '#d4a574'
-C_BUDGET = '#5a8a5a'
+C4 = '#8fae8f'
+C5 = '#b8a9c9'
+C_GRAY = '#9e9e9e'
 
-OUT_DIR = Path(__file__).parent / "figures"
+BASE_DIR = Path(__file__).parent
+OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
-def trim_p90(arr):
-    return arr[arr <= np.percentile(arr, 90)]
-
-
 def main():
-    # Simulate 1000 frames of process thread
-    np.random.seed(55)
-    process_times = np.clip(np.random.normal(2.56, 0.73, 1000), 1.27, 7.12)
+    clean_output_dir()
 
-    # Chart 1: Sorted process latency
+    csv_path = BASE_DIR / "throughput_raw.csv"
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] {csv_path} not found. Skipping all charts.")
+        return
+
+    df = pd.read_csv(csv_path)
+
+    # Chart 1: Histogram of process_ms (2500 frames)
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    sorted_proc = np.sort(process_times)
-    idx = np.arange(1, len(sorted_proc)+1)
-    ax.plot(idx, sorted_proc, '-', color=C1, linewidth=0.8)
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget (8.33ms)')
-    p99 = np.percentile(sorted_proc, 99)
-    ax.axhline(y=p99, color=C3, linewidth=0.8, linestyle='--', alpha=0.7,
-               label=f'P99 ({p99:.2f}ms)')
-    ax.set_xlabel('Frame (sorted by processing time)')
-    ax.set_ylabel('Processing Time (ms)')
-    ax.set_title('Pipeline Process Stage Latency (n=1000)')
+    data = df['process_ms'].dropna().values
+    mean_val = data.mean()
+    ax.hist(data, bins=50, color=C1, alpha=0.7, edgecolor='none')
+    ax.axvline(x=mean_val, color=C3, linestyle='--', linewidth=1,
+               label=f'Mean ({mean_val:.2f} ms)')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'Pipeline Process Latency Distribution (n={len(data)})')
     ax.legend(fontsize=9)
-    ax.set_ylim(0, 9)
-    savefig(fig, "pipeline_process_sorted.png")
+    savefig(fig, "throughput_process_histogram.png")
 
-    # Chart 2: FG command sorted (trimmed)
-    np.random.seed(88)
-    fg_times = np.concatenate([
-        np.random.exponential(0.8, 190) + 0.4,
-        np.random.uniform(5, 48.5, 10)
-    ])
-    fg_times = np.clip(fg_times, 0.36, 48.46)
-    fg_trimmed = trim_p90(np.sort(fg_times))
+    # Chart 2: Bar chart with error bars showing FPS per round
+    rounds = sorted(df['round'].unique())
+    round_fps_means = []
+    round_fps_stds = []
+    for rnd in rounds:
+        df_rnd = df[df['round'] == rnd]
+        fps_vals = 1000.0 / df_rnd['total_ms'].replace(0, np.nan).dropna().values
+        round_fps_means.append(fps_vals.mean())
+        round_fps_stds.append(fps_vals.std())
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    idx = np.arange(1, len(fg_trimmed)+1)
-    ax.plot(idx, fg_trimmed, '-', color=C1, linewidth=0.8)
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget (8.33ms)')
-    ax.set_xlabel('Command (sorted, trimmed >P90)')
-    ax.set_ylabel('FG Command Time (ms)')
-    ax.set_title('set_voltages() Latency (n=200, routine voltage adjust)')
-    ax.legend(fontsize=9)
-    savefig(fig, "pipeline_fg_sorted.png")
+    fig, ax = plt.subplots(figsize=(6, 4))
+    x_pos = np.arange(len(rounds))
+    ax.bar(x_pos, round_fps_means, yerr=round_fps_stds, capsize=4,
+           color=C1, alpha=0.8, edgecolor='none', ecolor=C_GRAY)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([f'R{r}' for r in rounds])
+    ax.set_xlabel('Round')
+    ax.set_ylabel('FPS')
+    ax.set_title('Throughput per Round (Frames Per Second)')
+    savefig(fig, "throughput_round_fps.png")
 
-    print("Done: 2 figures in", OUT_DIR)
+    # Chart 3: Time series of process_ms for first 200 frames (raw order)
+    fig, ax = plt.subplots(figsize=(10, 4))
+    df_first_round = df[df['round'] == rounds[0]].head(200)
+    ax.plot(df_first_round['frame_idx'].values,
+            df_first_round['process_ms'].values,
+            '-', color=C1, linewidth=0.7, alpha=0.9)
+    ax.set_xlabel('Frame Index')
+    ax.set_ylabel('Time (ms)')
+    ax.set_title('Process Latency Timeline (First 200 Frames)')
+    savefig(fig, "throughput_timeline.png")
+
+    print(f"Done: 3 charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':

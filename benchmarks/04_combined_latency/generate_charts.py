@@ -1,6 +1,14 @@
-"""04 — Combined Latency (Process + FG) Benchmark Charts"""
+"""04 — Combined Latency (Process + FG) Benchmark Charts
 
+Reads: combined_latency_raw.csv
+Outputs: combined_process_histogram.png, combined_round_consistency.png,
+         combined_fg_histogram.png
+"""
+
+import os
+import glob
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -25,90 +33,92 @@ C2 = '#a3c4dc'
 C3 = '#d4a574'
 C4 = '#8fae8f'
 C5 = '#b8a9c9'
-C_BUDGET = '#5a8a5a'
+C_GRAY = '#9e9e9e'
 
-OUT_DIR = Path(__file__).parent / "figures"
+BASE_DIR = Path(__file__).parent
+OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
-def trim_p90(arr):
-    return arr[arr <= np.percentile(arr, 90)]
-
-
 def main():
-    rounds = np.arange(1, 6)
-    round_data = {
-        'A: Voltage Adj': [10.86, 25.80, 25.91, 26.09, 25.81],
-        'B: Same-Group': [29.34, 29.02, 30.04, 29.38, 29.24],
-        'C: Cross-Group': [149.15, 148.01, 146.96, 145.51, 147.41],
-        'D: No FG': [2.30, 2.47, 2.29, 2.47, 2.59],
-    }
+    clean_output_dir()
 
-    # Simulate 1000 frames per scenario
-    np.random.seed(77)
-    sim_data = {
-        'A': np.clip(np.random.normal(22.89, 33.44, 1000), 1.71, 204.20),
-        'B': np.clip(np.random.normal(29.41, 15.11, 1000), 4.00, 89.75),
-        'C': np.clip(np.random.normal(147.41, 72.96, 1000), 6.84, 350.45),
-        'D': np.clip(np.random.normal(2.43, 0.71, 1000), 1.16, 6.07),
-    }
+    csv_path = BASE_DIR / "combined_latency_raw.csv"
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] {csv_path} not found. Skipping all charts.")
+        return
 
-    # Chart 1: Sorted distribution (trimmed)
-    fig, ax = plt.subplots(figsize=(8, 5))
-    colors = [C3, C5, C1, C4]
-    labels_map = {'A': 'A: Voltage Adj', 'B': 'B: Same-Group',
-                  'C': 'C: Cross-Group', 'D': 'D: No FG'}
-    for (key, vals), color in zip(sim_data.items(), colors):
-        trimmed = trim_p90(vals)
-        sorted_v = np.sort(trimmed)
-        idx = np.arange(1, len(sorted_v)+1)
-        ax.plot(idx, sorted_v, '-', color=color, linewidth=0.8,
-                label=f'{labels_map[key]} (mean={vals.mean():.1f}ms)')
+    df = pd.read_csv(csv_path)
 
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget (8.33ms)')
-    ax.set_xlabel('Frame (sorted, trimmed >P90)')
-    ax.set_ylabel('Combined Latency (ms)')
-    ax.set_title('Process + FG Combined Latency per Scenario (n=1000)')
-    ax.legend(fontsize=8)
-    savefig(fig, "combined_sorted_trimmed.png")
+    scenarios = ['A_voltage', 'B_same_group', 'C_cross_group', 'D_baseline']
+    scenario_labels = ['A: Voltage Adj', 'B: Same Group',
+                       'C: Cross Group', 'D: Baseline']
+    colors = [C3, C1, C5, C4]
 
-    # Chart 2: Per-round consistency
+    # Chart 1: 4 scenarios overlaid histograms (process_ms)
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for scenario, label, color in zip(scenarios, scenario_labels, colors):
+        df_s = df[df['scenario'] == scenario]
+        data = df_s['process_ms'].dropna().values
+        if len(data) > 0:
+            ax.hist(data, bins=50, color=color, alpha=0.5, edgecolor='none',
+                    label=f'{label} (mean={data.mean():.2f} ms)')
+
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title('Process Latency Distribution by Scenario')
+    ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
+    savefig(fig, "combined_process_histogram.png")
+
+    # Chart 2: Line plot: 5 rounds x 4 scenarios (process mean per round)
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    for (label, vals), color in zip(round_data.items(), colors):
-        ax.plot(rounds, vals, '-o', color=color, linewidth=1.2,
+    for scenario, label, color in zip(scenarios, scenario_labels, colors):
+        df_s = df[df['scenario'] == scenario]
+        rounds = sorted(df_s['round'].unique())
+        round_means = [df_s[df_s['round'] == r]['process_ms'].mean()
+                       for r in rounds]
+        ax.plot(rounds, round_means, '-o', color=color, linewidth=1.2,
                 markersize=5, label=label)
 
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
     ax.set_xlabel('Round')
-    ax.set_ylabel('Mean Latency (ms)')
-    ax.set_title('Per-Round Consistency (5 rounds × 200 frames)')
-    ax.set_xticks(rounds)
-    ax.legend(fontsize=8)
-    savefig(fig, "combined_per_round.png")
+    ax.set_ylabel('Mean Process Time (ms)')
+    ax.set_title('Per-Round Process Consistency (4 Scenarios)')
+    ax.set_xticks(sorted(df['round'].unique()))
+    ax.legend(fontsize=8, framealpha=0.9)
+    savefig(fig, "combined_round_consistency.png")
 
-    # Chart 3: Budget violation (dot plot)
-    fig, ax = plt.subplots(figsize=(6, 3.5))
-    scenarios_short = ['A: Volt', 'B: Same', 'C: Cross', 'D: None']
-    pcts = [46.3, 76.0, 98.8, 0.0]
-    y_pos = np.arange(len(scenarios_short))
-    point_colors = [C3 if p > 0 else C4 for p in pcts]
-    ax.scatter(pcts, y_pos, s=80, c=point_colors, zorder=5)
-    ax.hlines(y_pos, 0, pcts, colors=C2, linewidth=2)
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(scenarios_short)
-    ax.set_xlabel('Frames Exceeding Budget (%)')
-    ax.set_title('Budget Violation Rate')
-    for x, y in zip(pcts, y_pos):
-        ax.text(x + 1.5, y, f'{x:.1f}%', va='center', fontsize=9)
-    ax.set_xlim(0, 110)
-    savefig(fig, "combined_budget_violation.png")
+    # Chart 3: FG latency histograms for scenarios A, B, C overlaid
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fg_scenarios = ['A_voltage', 'B_same_group', 'C_cross_group']
+    fg_labels = ['A: Voltage Adj', 'B: Same Group', 'C: Cross Group']
+    fg_colors = [C3, C1, C5]
 
-    print("Done: 3 figures in", OUT_DIR)
+    for scenario, label, color in zip(fg_scenarios, fg_labels, fg_colors):
+        df_s = df[df['scenario'] == scenario]
+        data = df_s['fg_ms'].dropna().values
+        if len(data) > 0:
+            ax.hist(data, bins=50, color=color, alpha=0.5, edgecolor='none',
+                    label=f'{label} (mean={data.mean():.2f} ms)')
+
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title('FG Latency Distribution (Scenarios A, B, C)')
+    ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
+    savefig(fig, "combined_fg_histogram.png")
+
+    print(f"Done: 3 charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':

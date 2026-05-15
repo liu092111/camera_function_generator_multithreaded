@@ -1,6 +1,14 @@
-"""08 — System Budget Overview Charts"""
+"""08 — System Budget Benchmark Charts
 
+Reads: system_budget_raw.csv
+Outputs: system_process_histogram.png, system_round_errorbar.png,
+         system_budget_bar.png
+"""
+
+import os
+import glob
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -21,63 +29,95 @@ plt.rcParams.update({
 })
 
 C1 = '#6b8cae'
+C2 = '#a3c4dc'
 C3 = '#d4a574'
-C_LIGHT = '#d9e2ec'
+C4 = '#8fae8f'
+C5 = '#b8a9c9'
 C_GRAY = '#9e9e9e'
-C_BUDGET = '#5a8a5a'
 
-OUT_DIR = Path(__file__).parent / "figures"
+BASE_DIR = Path(__file__).parent
+OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
 def main():
-    # Chart 1: Thread budget utilization
+    clean_output_dir()
+
+    csv_path = BASE_DIR / "system_budget_raw.csv"
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] {csv_path} not found. Skipping all charts.")
+        return
+
+    df = pd.read_csv(csv_path)
+
+    # Chart 1: Histogram of process_ms from all 2500 frames
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    data = df['process_ms'].dropna().values
+    mean_val = data.mean()
+    ax.hist(data, bins=50, color=C1, alpha=0.7, edgecolor='none')
+    ax.axvline(x=mean_val, color=C3, linestyle='--', linewidth=1,
+               label=f'Mean ({mean_val:.2f} ms)')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title(f'System Process Latency Distribution (n={len(data)})')
+    ax.legend(fontsize=9)
+    savefig(fig, "system_process_histogram.png")
+
+    # Chart 2: Per-round process mean +/- std (error bar plot)
+    rounds = sorted(df['round'].unique())
+    round_means = []
+    round_stds = []
+    for rnd in rounds:
+        df_rnd = df[df['round'] == rnd]
+        round_means.append(df_rnd['process_ms'].mean())
+        round_stds.append(df_rnd['process_ms'].std())
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    x_pos = np.arange(len(rounds))
+    ax.errorbar(x_pos, round_means, yerr=round_stds, fmt='o',
+                color=C1, ecolor=C2, capsize=4, markersize=7,
+                elinewidth=1.5, capthick=1.2)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([f'R{r}' for r in rounds])
+    ax.set_xlabel('Round')
+    ax.set_ylabel('Process Time (ms)')
+    ax.set_title('Process Thread Latency Per Round: Mean +/- Std')
+    savefig(fig, "system_round_errorbar.png")
+
+    # Chart 3: Horizontal bar showing per-thread used time (no budget line)
+    thread_cols = ['capture_ms', 'process_ms', 'main_ms']
+    thread_labels = ['Capture Thread', 'Process Thread', 'Main Thread']
+    thread_colors = [C1, C3, C4]
+
+    thread_means = [df[col].mean() for col in thread_cols]
+
     fig, ax = plt.subplots(figsize=(8, 3))
-    budget = 8.33
-    threads = ['Capture Thread', 'Process Thread', 'Main Thread']
-    used = [0.031, 2.53, 1.20]
-    headroom = [budget - u for u in used]
-
-    y_pos = np.arange(len(threads))
-    ax.barh(y_pos, used, height=0.45, color=C1, alpha=0.7, label='Used')
-    ax.barh(y_pos, headroom, left=used, height=0.45, color=C_LIGHT, label='Headroom')
-    ax.axvline(x=budget, color=C_BUDGET, linewidth=1.2)
+    y_pos = np.arange(len(thread_labels))
+    bars = ax.barh(y_pos, thread_means, height=0.45, color=thread_colors,
+                   alpha=0.8, edgecolor='none')
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(threads)
+    ax.set_yticklabels(thread_labels)
     ax.set_xlabel('Time (ms)')
-    ax.set_title('Per-Thread Budget Utilization (120fps)')
-    ax.legend(fontsize=8, loc='lower right')
-    for i, val in enumerate(used):
-        pct = val / budget * 100
-        ax.text(val + 0.15, i, f'{val:.2f}ms ({pct:.0f}%)', va='center', fontsize=8)
-    ax.set_xlim(0, budget * 1.05)
-    savefig(fig, "system_budget.png")
+    ax.set_title('Per-Thread Mean Latency')
+    for i, (bar, val) in enumerate(zip(bars, thread_means)):
+        ax.text(bar.get_width() + max(thread_means) * 0.02, i,
+                f'{val:.2f} ms', va='center', fontsize=8, color='#444444')
+    ax.set_xlim(0, max(thread_means) * 1.25)
+    savefig(fig, "system_budget_bar.png")
 
-    # Chart 2: Component timing range (dot + range line)
-    fig, ax = plt.subplots(figsize=(7, 4))
-    components = ['Capture', 'Process', 'FG Same-Grp', 'FG Cross-Grp']
-    typical = [0.031, 2.53, 6.0, 16.5]
-    worst = [0.239, 4.67, 36.4, 117.9]
-
-    y_pos = np.arange(len(components))
-    ax.scatter(typical, y_pos, s=60, color=C1, zorder=5, label='Typical')
-    ax.scatter(worst, y_pos, s=60, color=C3, marker='D', zorder=5, label='Worst-case')
-    ax.hlines(y_pos, typical, worst, colors=C_GRAY, linewidth=1.5, alpha=0.5)
-    ax.axvline(x=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(components)
-    ax.set_xlabel('Time (ms)')
-    ax.set_title('System Component Timing Range')
-    ax.legend(fontsize=8)
-    ax.set_xscale('log')
-    savefig(fig, "system_timing_range.png")
-
-    print("Done: 2 figures in", OUT_DIR)
+    print(f"Done: 3 charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':

@@ -1,6 +1,13 @@
-"""06 — Mode Switch Impact on Pipeline Charts"""
+"""06 — Mode Switch Impact Benchmark Charts
 
+Reads: mode_impact_raw.csv
+Outputs: mode_impact_histogram.png, mode_impact_round_errorbar.png
+"""
+
+import os
+import glob
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -21,63 +28,75 @@ plt.rcParams.update({
 })
 
 C1 = '#6b8cae'
+C2 = '#a3c4dc'
 C3 = '#d4a574'
+C4 = '#8fae8f'
+C5 = '#b8a9c9'
 C_GRAY = '#9e9e9e'
-C_BUDGET = '#5a8a5a'
 
-OUT_DIR = Path(__file__).parent / "figures"
+BASE_DIR = Path(__file__).parent
+OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
 def main():
-    np.random.seed(66)
-    all_frames = np.clip(np.random.normal(2.75, 0.68, 1002), 1.0, 4.66)
-    during_idx = np.random.choice(1002, 124, replace=False)
-    during_mask = np.zeros(1002, dtype=bool)
-    during_mask[during_idx] = True
+    clean_output_dir()
 
-    during_times = np.sort(all_frames[during_mask])
-    outside_times = np.sort(all_frames[~during_mask])
+    csv_path = BASE_DIR / "mode_impact_raw.csv"
+    if not os.path.exists(csv_path):
+        print(f"[WARNING] {csv_path} not found. Skipping all charts.")
+        return
 
-    # Chart 1: Overlaid sorted (during vs outside)
+    df = pd.read_csv(csv_path)
+
+    # Chart 1: Histogram of all 2500 frames process_ms
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(np.arange(1, len(outside_times)+1) / len(outside_times) * 100,
-            outside_times, '-', color=C1, linewidth=1,
-            label=f'Outside switch (n={len(outside_times)}, mean={outside_times.mean():.2f}ms)')
-    ax.plot(np.arange(1, len(during_times)+1) / len(during_times) * 100,
-            during_times, '-', color=C3, linewidth=1,
-            label=f'During switch (n={len(during_times)}, mean={during_times.mean():.2f}ms)')
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
-    ax.set_xlabel('Percentile (%)')
-    ax.set_ylabel('Process Time (ms)')
-    ax.set_title('Process Thread: During vs Outside Mode Switch')
+    data = df['process_ms'].dropna().values
+    mean_val = data.mean()
+    ax.hist(data, bins=50, color=C1, alpha=0.7, edgecolor='none',
+            label=f'All frames (n={len(data)}, mean={mean_val:.2f} ms)')
+    ax.axvline(x=mean_val, color=C3, linestyle='--', linewidth=1,
+               label=f'Mean ({mean_val:.2f} ms)')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title('Process Latency During Mode-Switch Test (Histogram)')
     ax.legend(fontsize=9)
-    ax.set_ylim(0, 9)
-    savefig(fig, "mode_switch_overlay.png")
+    savefig(fig, "mode_impact_histogram.png")
 
-    # Chart 2: All frames sorted
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    sorted_all = np.sort(all_frames)
-    idx = np.arange(1, len(sorted_all)+1)
-    ax.plot(idx, sorted_all, '-', color=C1, linewidth=0.8,
-            label=f'All frames (n=1002, mean={all_frames.mean():.2f}ms)')
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, alpha=0.7, label='Budget')
-    p99 = np.percentile(sorted_all, 99)
-    ax.axhline(y=p99, color=C_GRAY, linewidth=0.6, linestyle='--',
-               alpha=0.7, label=f'P99 ({p99:.2f}ms)')
-    ax.set_xlabel('Frame (sorted)')
-    ax.set_ylabel('Process Time (ms)')
-    ax.set_title('Process Thread During Mode Switching Test (n=1002)')
-    ax.legend(fontsize=9)
-    ax.set_ylim(0, 9)
-    savefig(fig, "mode_switch_all_sorted.png")
+    # Chart 2: Per-round mean +/- std (error bar plot)
+    rounds = sorted(df['round'].unique())
+    round_means = []
+    round_stds = []
+    for rnd in rounds:
+        df_rnd = df[df['round'] == rnd]
+        round_means.append(df_rnd['process_ms'].mean())
+        round_stds.append(df_rnd['process_ms'].std())
 
-    print("Done: 2 figures in", OUT_DIR)
+    fig, ax = plt.subplots(figsize=(6, 4))
+    x_pos = np.arange(len(rounds))
+    ax.errorbar(x_pos, round_means, yerr=round_stds, fmt='o',
+                color=C1, ecolor=C2, capsize=4, markersize=7,
+                elinewidth=1.5, capthick=1.2)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([f'R{r}' for r in rounds])
+    ax.set_xlabel('Round')
+    ax.set_ylabel('Time (ms)')
+    ax.set_title('Process Latency Per Round: Mean +/- Std')
+    savefig(fig, "mode_impact_round_errorbar.png")
+
+    print(f"Done: 2 charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':

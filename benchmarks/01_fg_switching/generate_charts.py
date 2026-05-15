@@ -1,6 +1,13 @@
-"""01 — Function Generator Switching Benchmark Charts"""
+"""01 — Function Generator Switching Benchmark Charts
 
+Reads: fg_switching_gen3_raw.csv, fg_switching_3gen_raw.csv (optional)
+Outputs: fg_gen3_histogram.png, fg_3gen_comparison.png, fg_speedup.png
+"""
+
+import os
+import glob
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -26,97 +33,106 @@ C3 = '#d4a574'
 C4 = '#8fae8f'
 C5 = '#b8a9c9'
 C_GRAY = '#9e9e9e'
-C_BUDGET = '#5a8a5a'
 
-OUT_DIR = Path(__file__).parent / "figures"
+BASE_DIR = Path(__file__).parent
+OUT_DIR = BASE_DIR / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
 
+def clean_output_dir():
+    """Remove all old figures from the output directory."""
+    for f in glob.glob(str(OUT_DIR / "*.png")):
+        os.remove(f)
+
+
 def savefig(fig, name):
-    fig.savefig(OUT_DIR / name, bbox_inches='tight', pad_inches=0.1)
+    """Save figure and close."""
+    fig.savefig(OUT_DIR / name, bbox_inches='tight')
     plt.close(fig)
 
 
-def trim_p90(arr):
-    return arr[arr <= np.percentile(arr, 90)]
-
-
-def generate_sorted_samples(mean, std, vmin, vmax, n=50):
-    np.random.seed(hash((mean, std)) % 2**31)
-    samples = np.random.normal(mean, std, n * 20)
-    samples = samples[(samples >= vmin) & (samples <= vmax)]
-    if len(samples) >= n:
-        return np.sort(samples[:n])
-    extra = np.random.uniform(vmin, vmax, n - len(samples))
-    return np.sort(np.concatenate([samples, extra]))[:n]
-
-
 def main():
-    scenarios = {
-        'Gen-1 Full': (163.1, 23.1, 121.9, 263.5),
-        'Same (1↔3)': (10.8, 19.8, 2.0, 102.3),
-        'Same (2↔4)': (8.5, 14.0, 2.0, 46.8),
-        'Cross (1→2)': (28.9, 35.5, 3.7, 117.9),
-        'Cross (2→1)': (5.1, 1.4, 3.6, 9.7),
-        'Standby': (6.3, 11.3, 2.0, 52.6),
-    }
+    clean_output_dir()
 
-    data_trimmed = {}
-    for name, params in scenarios.items():
-        raw = generate_sorted_samples(*params)
-        data_trimmed[name] = trim_p90(raw)
+    # --- Load Gen-3 data ---
+    gen3_csv = BASE_DIR / "fg_switching_gen3_raw.csv"
+    if not os.path.exists(gen3_csv):
+        print(f"[WARNING] {gen3_csv} not found. Skipping Gen-3 charts.")
+        return
 
-    # Chart 1: All scenarios sorted (trimmed)
+    df = pd.read_csv(gen3_csv)
+
+    cols = ['same_group_1_3_ms', 'same_group_2_4_ms',
+            'cross_group_1_to_2_ms', 'cross_group_2_to_1_ms',
+            'voltage_adjust_ms']
+    labels = ['Same Group (1-3)', 'Same Group (2-4)',
+              'Cross Group (1->2)', 'Cross Group (2->1)',
+              'Voltage Adjust']
+    colors = [C1, C2, C3, C4, C5]
+
+    # Chart 1: Overlaid histograms for 5 Gen-3 scenarios
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    gen1 = data_trimmed['Gen-1 Full']
-    ax.plot(np.arange(1, len(gen1)+1), gen1, '-', color=C3, linewidth=1.5,
-            label=f'Gen-1 Full (mean={scenarios["Gen-1 Full"][0]:.0f}ms)')
+    for col, label, color in zip(cols, labels, colors):
+        data = df[col].dropna().values
+        mean_val = data.mean()
+        ax.hist(data, bins=30, color=color, alpha=0.5, edgecolor='none',
+                label=f'{label} (mean={mean_val:.2f} ms)')
 
-    gen2_names = [k for k in scenarios if k != 'Gen-1 Full']
-    gen2_colors = [C1, C2, C5, C4, C_GRAY]
-    for name, color in zip(gen2_names, gen2_colors):
-        d = data_trimmed[name]
-        ax.plot(np.arange(1, len(d)+1), d, '-', color=color, linewidth=1,
-                label=f'{name} ({scenarios[name][0]:.1f}ms)')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Count')
+    ax.set_title('Gen-3 FG Mode-Switching Latency Distribution')
+    ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
+    savefig(fig, "fg_gen3_histogram.png")
 
-    ax.set_xlabel('Trial (sorted, trimmed >P90)')
-    ax.set_ylabel('Switching Time (ms)')
-    ax.set_title('FG Mode-Switching Latency (n=50, outliers removed)')
-    ax.legend(fontsize=8, loc='upper left', framealpha=0.9)
-    savefig(fig, "fg_sorted_all_trimmed.png")
+    # Chart 2: 3-generation comparison histogram (if file exists)
+    gen3gen_csv = BASE_DIR / "fg_switching_3gen_raw.csv"
+    if os.path.exists(gen3gen_csv):
+        df3 = pd.read_csv(gen3gen_csv)
+        fig, ax = plt.subplots(figsize=(8, 4.5))
 
-    # Chart 2: Gen-2 only (zoomed)
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    for name, color in zip(gen2_names, gen2_colors):
-        d = data_trimmed[name]
-        ax.plot(np.arange(1, len(d)+1), d, '-', color=color, linewidth=1.2,
-                label=f'{name} ({scenarios[name][0]:.1f}ms)')
+        gen_cols = {
+            'Gen-1 Full': ('gen1_full_ms', C3),
+            'Gen-2 Same': ('gen2_same_ms', C1),
+            'Gen-2 Cross': ('gen2_cross_ms', C2),
+            'Gen-3 Same': ('gen3_same_ms', C4),
+            'Gen-3 Cross': ('gen3_cross_ms', C5),
+            'Gen-3 Voltage': ('gen3_voltage_ms', C_GRAY),
+        }
+        for label, (col, color) in gen_cols.items():
+            if col in df3.columns:
+                data = df3[col].dropna().values
+                if len(data) > 0:
+                    ax.hist(data, bins=30, color=color, alpha=0.5,
+                            edgecolor='none',
+                            label=f'{label} (mean={data.mean():.2f} ms)')
 
-    ax.axhline(y=8.33, color=C_BUDGET, linewidth=1, linestyle='-',
-               alpha=0.7, label='120fps budget (8.33ms)')
-    ax.set_xlabel('Trial (sorted, trimmed >P90)')
-    ax.set_ylabel('Switching Time (ms)')
-    ax.set_title('Gen-2 Mode-Switching Latency (Zoomed)')
-    ax.legend(fontsize=8, framealpha=0.9)
-    savefig(fig, "fg_sorted_gen2_trimmed.png")
+        ax.set_xlabel('Time (ms)')
+        ax.set_ylabel('Count')
+        ax.set_title('FG Switching: Gen-1 vs Gen-2 vs Gen-3')
+        ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
+        savefig(fig, "fg_3gen_comparison.png")
+    else:
+        print("[WARNING] fg_switching_3gen_raw.csv not found. Skipping 3-gen chart.")
 
-    # Chart 3: Speedup dot plot
-    fig, ax = plt.subplots(figsize=(5, 3))
-    labels = ['Same-Group', 'Cross-Group', 'Overall']
-    speedups = [16.9, 9.6, 13.7]
+    # Chart 3: Horizontal dot plot showing mean latency per scenario
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    means = {col: df[col].dropna().mean() for col in cols}
+    scenario_means = [means[col] for col in cols]
     y_pos = np.arange(len(labels))
-    ax.scatter(speedups, y_pos, s=80, color=C1, zorder=5)
-    ax.hlines(y_pos, 0, speedups, colors=C2, linewidth=2)
+
+    ax.scatter(scenario_means, y_pos, s=80, color=C1, zorder=5)
+    ax.hlines(y_pos, 0, scenario_means, colors=C2, linewidth=2)
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels)
-    ax.set_xlabel('Speed-up (× vs Gen-1)')
-    ax.set_title('Gen-2 Performance Improvement')
-    for x, y in zip(speedups, y_pos):
-        ax.text(x + 0.4, y, f'{x:.1f}×', va='center', fontsize=9)
-    ax.set_xlim(0, max(speedups) * 1.25)
+    ax.set_xlabel('Mean Switching Time (ms)')
+    ax.set_title('Gen-3 Switching Latency by Scenario')
+    for x_val, y_val in zip(scenario_means, y_pos):
+        ax.text(x_val + max(scenario_means) * 0.03, y_val,
+                f'{x_val:.2f} ms', va='center', fontsize=8)
+    ax.set_xlim(0, max(scenario_means) * 1.3)
     savefig(fig, "fg_speedup.png")
 
-    print("Done: 3 figures in", OUT_DIR)
+    print(f"Done: charts saved to {OUT_DIR}")
 
 
 if __name__ == '__main__':
