@@ -1,0 +1,54 @@
+================================================================================
+  Test 08: 系統時間預算驗證
+  System Budget Validation Benchmark
+  測試日期：2026-05-14
+================================================================================
+
+  目的：
+    同時運行三個執行緒（Capture / Process / Main），
+    驗證各自在 8.33ms frame budget 內完成工作，
+    確認系統能穩定維持 120fps 即時控制。
+
+  設備：
+    - 攝影機：Arducam B0332 (120fps, DirectShow + MJPG)
+    - 函數產生器：Keysight 33622A (Gen-3, real VISA)
+    - 校正：TPS undistort enabled
+    - 三執行緒架構：
+        Capture Thread: 讀取 camera frames -> frame_queue
+        Process Thread: undistort + detect + track -> result_queue
+        Main Thread:    PID 計算 + FG voltage command (every 5 frames)
+
+  測試量：5 rounds x 500 frames = 2500 frames
+
+  結果：
+    Thread              Mean      P99       Verdict
+    Capture Thread      8.242ms   16.31ms   OK (blocking wait, pipelined)
+    Process Thread      3.012ms   4.642ms   PASS (< 8.33ms)
+    Main Thread         0.126ms   0.943ms   PASS (< 8.33ms)
+
+    Effective FPS: 120.6 +/- 0.1
+
+  Main Thread 分解：
+    有 FG voltage 指令 (500 frames): mean=0.619ms  P99=1.130ms
+    無 FG 指令 (2000 frames):        mean=0.003ms  P99=0.004ms
+
+  Per-Round 一致性：
+    Round   FPS     Proc Mean   Proc P99
+    1       120.5   2.586ms     3.882ms
+    2       120.6   3.157ms     4.832ms
+    3       120.7   3.144ms     4.642ms
+    4       120.6   3.018ms     4.558ms
+    5       120.7   3.153ms     4.841ms
+    Avg     120.6   3.012 +/- 0.219 ms
+
+  Capture Thread 說明：
+    mean=8.24ms 是正常的 — cap.read() 是阻塞式等待下一幀。
+    在 120fps 下每幀間隔 = 8.33ms，P99=16ms 是 USB camera timing jitter。
+    這不影響 pipeline throughput，因為 Capture Thread 是 pipelined 的。
+
+  結論：
+    Process Thread (P99=4.6ms) 和 Main Thread (P99=0.9ms) 均在 budget 內。
+    系統穩定運行 120.6fps，三執行緒架構驗證通過。
+
+  數據檔案：system_budget_raw.csv (2500 frames: capture_ms, process_ms, main_ms, fg_sent)
+================================================================================

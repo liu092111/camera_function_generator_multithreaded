@@ -1,0 +1,49 @@
+================================================================================
+  Test 05: 管線吞吐量測試
+  Pipeline Throughput Benchmark
+  測試日期：2026-05-14
+================================================================================
+
+  目的：
+    驗證完整三執行緒管線在持續運行下能否維持 120fps，量測丟幀率和各階段延遲。
+
+  設備：
+    - 攝影機：Arducam B0332 (120fps, MJPG, DirectShow)
+    - 函數產生器：Keysight 33622A (Gen-3 voltage command)
+    - 校正：TPS undistort enabled
+    - 三執行緒：Capture Thread -> Process Thread -> Main Thread
+
+  方法：
+    - 5 rounds x 500 frames = 2500 frames total
+    - FG voltage command every 5 frames (200 commands/round)
+    - Queue-based pipeline with frame_queue (size=120)
+
+  結果：
+    指標                      值              標準        Verdict
+    Effective FPS             120.6 +/- 0.1   >= 114      PASS
+    Drop rate                 0.0%            < 5%        PASS
+    Process P99               4.232ms         < 8.33ms    PASS
+    FG write mean             0.556ms         -           -
+
+  Per-Round 一致性：
+    Round   FPS     Drops   Proc Mean   Proc P99
+    1       120.5   0       2.589ms     4.232ms
+    2       120.4   0       2.373ms     4.272ms
+    3       120.6   0       2.344ms     4.229ms
+    4       120.7   0       2.386ms     3.918ms
+    5       120.7   0       2.673ms     4.179ms
+
+  Per-Frame 延遲分解：
+    Stage           Mean      P99
+    Queue wait      0.164ms   0.821ms
+    Process         2.473ms   4.232ms
+    FG write        0.556ms   1.149ms
+    Total           2.585ms   4.650ms
+
+  結論：
+    系統穩定維持 120.6fps，零丟幀。
+    FG voltage 指令僅需 0.56ms，完全不影響 throughput。
+    Queue wait 極短（0.16ms），表示 Process Thread 處理速度遠快於 camera frame rate。
+
+  數據檔案：throughput_raw.csv (2500 frames: round, queue_wait, process, fg, total)
+================================================================================

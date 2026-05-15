@@ -162,8 +162,8 @@ if __name__ == "__main__":
     print("Connecting...")
     
     rm = visa.ResourceManager()
-    #inst = rm.open_resource('USB0::0x0957::0x5707::MY59000656::0::INSTR')
-    inst = rm.open_resource('USB0::0x0957::0x5707::MY59001615::0::INSTR')
+    inst = rm.open_resource('USB0::0x0957::0x5707::MY59000656::0::INSTR')
+    #inst = rm.open_resource('USB0::0x0957::0x5707::MY59001615::0::INSTR')
     
     try:
         inst.control_ren(6)

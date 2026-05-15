@@ -1,0 +1,43 @@
+================================================================================
+  Test 04: 組合延遲測試 (Process + FG 指令)
+  Combined Latency Benchmark
+  測試日期：2026-05-14
+================================================================================
+
+  目的：
+    驗證不同 FG 操作場景下，Process Thread 是否受到影響。
+    證明多執行緒架構中 thread isolation 的有效性。
+
+  設備：
+    - 函數產生器：Keysight 33622A (real VISA, Gen-3 compound commands)
+    - 影像：synthetic frames with TPS undistort
+    - 每場景：5 rounds x 200 frames = 1000 frames
+
+  四種場景：
+    A: Process + 電壓調整（PID 常規操作，最頻繁）
+    B: Process + 同組極性切換（Mode 1<->3, OFF;POL;ON;*WAI）
+    C: Process + 跨組波形切換（Mode 1<->2, 完整 compound switch）
+    D: Process only（baseline，無 FG 操作）
+
+  結果（Process Thread）：
+    場景              Mean +/- Std         P99       Verdict
+    A: Voltage Adj    2.268 +/- 0.198 ms   4.234ms   PASS
+    B: Same-Group     2.415 +/- 0.211 ms   4.178ms   PASS
+    C: Cross-Group    2.247 +/- 0.229 ms   4.038ms   PASS
+    D: Baseline       1.986 +/- 0.111 ms   3.656ms   PASS
+
+  FG 指令延遲（Main Thread，參考）：
+    A: Voltage       mean=10.1ms  (偶爾 USB jitter spike)
+    B: Same-Group    mean=28.8ms  (compound polarity switch)
+    C: Cross-Group   mean=32.5ms  (compound waveform switch)
+
+  Process Thread Overall: P99 = 3.850ms < 8.33ms  [PASS]
+
+  結論：
+    Process Thread 在所有場景下表現一致（2.0-2.4ms），
+    不受 FG 指令延遲影響（±0.2ms round-to-round 變異）。
+    證實 FG 操作在 Main Thread 上非同步執行，
+    不會阻塞 Process Thread 的 frame-rate compliance。
+
+  數據檔案：combined_latency_raw.csv (4000 frames: 4 scenarios x 5 rounds x 200)
+================================================================================

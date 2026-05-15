@@ -1,0 +1,58 @@
+================================================================================
+  Test 03: 端到端延遲測試 (Gen-2 vs Gen-3 比較)
+  End-to-End Latency Benchmark
+  測試日期：2026-05-14
+================================================================================
+
+  目的：
+    測量完整控制迴路延遲（Camera Capture -> Process -> FG Command），
+    比較 Gen-2 和 Gen-3 FG 指令策略的延遲差異。
+
+  設備：
+    - 攝影機：Arducam B0332 (120fps)
+    - 函數產生器：Keysight 33622A (real VISA)
+    - 校正：TPS rectification enabled
+
+  方法：
+    - Gen-3: SOUR1:VOLT X;SOUR2:VOLT Y（單次 compound write, 無 *WAI）
+    - Gen-2: OUTP OFF -> VOLT -> OUTP ON -> *WAI（4 次獨立 write）
+    - 每代: 5 rounds x 200 frames
+    - Live camera + Real FG
+
+  三段延遲定義：
+    Seg1 (Capture): cap.read() 取得一幀
+    Seg2 (Process): undistort + detect + kalman + EMA
+    Seg3 (FG Write): 送出 FG 電壓指令
+
+  結果：
+    段落          Gen-3 mean    Gen-2 mean
+    Seg2 Process  2.662ms       2.481ms      (不受 FG 策略影響)
+    Seg3 FG Write 6.583ms       39.933ms     (Gen-3 快 6.1x)
+
+    Process Thread (critical path): P99 = 4.250ms  [PASS]
+
+  Per-Round FG Write 比較：
+    Round   Gen-3      Gen-2
+    1       6.576ms    25.978ms
+    2       6.550ms    44.972ms
+    3       6.388ms    42.023ms
+    4       6.373ms    42.127ms
+    5       7.029ms    44.565ms
+
+  FG Write 加速：
+    Gen-2 mean: 39.93ms
+    Gen-3 mean: 6.58ms
+    加速比: 6.1x
+
+  架構說明：
+    實際系統中三段在不同 thread 上平行執行：
+    - Capture Thread: 持續讀取 camera（pipelined）
+    - Process Thread: 影像處理（critical path，決定 frame rate）
+    - Main Thread: FG 指令（非同步，不阻塞 pipeline）
+
+  結論：
+    Gen-3 FG write 延遲比 Gen-2 降低 6.1 倍。
+    Process Thread P99=4.25ms，遠低於 8.33ms budget。
+
+  數據檔案：e2e_latency_raw.csv (2000 frames: 1000 Gen-3 + 1000 Gen-2)
+================================================================================

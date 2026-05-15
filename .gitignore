@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Video files (too large for GitHub, keep locally)
+*.avi
+*.mp4

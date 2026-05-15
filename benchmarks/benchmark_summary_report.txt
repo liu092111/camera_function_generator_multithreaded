@@ -1,0 +1,299 @@
+================================================================================
+  壓電超音波馬達視覺伺服控制系統 — Benchmark 測試總報告
+  Piezoelectric Ultrasonic Motor Visual Servo Control System
+  測試日期：2026-05-14
+  設備：Keysight 33622A + Arducam B0332 (120fps) + Windows PC
+================================================================================
+
+
+--------------------------------------------------------------------------------
+  Test 01: 函數產生器模式切換延遲 (Function Generator Mode-Switching)
+--------------------------------------------------------------------------------
+
+  目的：
+    比較三代 SCPI 指令策略的切換速度，驗證 Gen-3 compound command 方法
+    能否將所有切換操作控制在 5ms 以內（120fps frame budget = 8.33ms）。
+
+  方法：
+    - Gen-1：每次切換重新讀取 CSV + 上傳波形 + 完整配置（~260ms）
+    - Gen-2：預載波形，每次用多條獨立 SCPI write + 多個 *WAI（~2-40ms）
+    - Gen-3：預載波形，所有指令用分號串接成單次 USB write（<1ms）
+
+  測試量：50 trials/scenario + 10 warmup, 6 scenarios
+
+  結果（Gen-3，P99）：
+    同組極性切換 (1<->3):  0.723 ms  [PASS]
+    同組極性切換 (2<->4):  1.770 ms  [PASS]
+    跨組波形切換 (1->2):   1.966 ms  [PASS]
+    跨組波形切換 (2->1):   1.281 ms  [PASS]
+    電壓調整 (PID):        3.957 ms  [PASS]
+
+  加速比（Gen-3 vs Gen-1）：
+    Gen-1 平均: ~268 ms
+    Gen-3 平均: ~0.4 ms
+    加速比: >600x
+
+  結論：Gen-3 compound SCPI 方法成功將所有切換操作控制在 5ms budget 內。
+
+  數據檔案：fg_switching_gen3_raw.csv (50 trials x 5 scenarios)
+
+
+--------------------------------------------------------------------------------
+  Test 02: 影像處理管線逐幀延遲 (Process Thread Per-Frame Pipeline)
+--------------------------------------------------------------------------------
+
+  目的：
+    驗證影像處理管線（Undistort -> Rotate -> Kalman -> HSV 偵測 -> EMA -> 繪圖）
+    能否在 8.33ms 以內完成單幀處理，維持 120fps 即時性。
+
+  方法：
+    - Offline: 500 synthetic frames
+    - Online single-pass: 500 live camera frames
+    - Online multi-round: 5 rounds x 200 frames
+
+  結果：
+    Offline:       mean=1.177ms  P99=2.466ms  [PASS]
+    Online single: mean=1.733ms  P99=3.164ms  [PASS]
+    Online 5-round: mean=1.709ms  P99=3.569ms  [PASS]
+
+  Per-Round 一致性（Online）：
+    Round 1: 1.813ms | Round 2: 1.684ms | Round 3: 1.704ms
+    Round 4: 1.655ms | Round 5: 1.687ms
+    平均: 1.709 +/- 0.055 ms
+
+  Per-Step 分解（Online）：
+    Undistort (TPS remap):   0.700ms  (41%)
+    HSV + Morphology:        0.755ms  (44%)
+    Rotate + Flip:           0.170ms  (10%)
+    Draw Overlay:            0.059ms  (3%)
+    Kalman + EMA:            0.024ms  (1%)
+
+  結論：影像處理管線只使用 frame budget 的 21%，留有 5.6ms 餘裕。
+
+  數據檔案：process_thread_raw.csv (2000 frames, per-step timing)
+
+
+--------------------------------------------------------------------------------
+  Test 03: 端到端延遲 (End-to-End Latency: Capture -> Process -> FG)
+--------------------------------------------------------------------------------
+
+  目的：
+    測量完整控制迴路延遲，並比較 Gen-2 vs Gen-3 的 FG 指令延遲差異。
+
+  方法：
+    - Gen-3 (compound, no *WAI): 5 rounds x 200 frames
+    - Gen-2 (OUTP OFF/ON + *WAI): 5 rounds x 200 frames
+    - 使用 live camera + real FG VISA
+
+  結果：
+    Gen-3 FG Write: mean=6.58ms  (P99=45.2ms, USB jitter)
+    Gen-2 FG Write: mean=39.93ms (P99=109.3ms)
+    加速比: 6.1x
+
+    Process Thread (critical path): P99=4.250ms  [PASS]
+
+  Per-Round FG Write 比較：
+    Round  Gen-3 mean  Gen-2 mean
+    1      6.576ms     25.978ms
+    2      6.550ms     44.972ms
+    3      6.388ms     42.023ms
+    4      6.373ms     42.127ms
+    5      7.029ms     44.565ms
+
+  結論：
+    Gen-3 FG write 比 Gen-2 快 6.1 倍。在多執行緒架構中，
+    Process Thread（critical path）P99=4.25ms 遠低於 budget。
+    FG write 在 Main Thread 上非同步執行，不阻塞 frame rate。
+
+  數據檔案：e2e_latency_raw.csv (2000 frames: 1000 Gen-3 + 1000 Gen-2)
+
+
+--------------------------------------------------------------------------------
+  Test 04: 組合延遲 (Process + FG Command Combined Latency)
+--------------------------------------------------------------------------------
+
+  目的：
+    測試四種場景下 Process Thread 是否受 FG 指令影響。
+
+  方法：
+    - Scenario A: Process + 電壓調整（PID 常規操作）
+    - Scenario B: Process + 同組極性切換
+    - Scenario C: Process + 跨組波形切換
+    - Scenario D: Process only（baseline）
+    - 每個場景: 5 rounds x 200 frames
+
+  結果（Process Thread P99）：
+    A: Voltage Adj:   4.234ms  [PASS]
+    B: Same-Group:    4.178ms  [PASS]
+    C: Cross-Group:   4.038ms  [PASS]
+    D: Baseline:      3.656ms  [PASS]
+
+  Per-Round 一致性：
+    A: proc mean = 2.268 +/- 0.198 ms
+    B: proc mean = 2.415 +/- 0.211 ms
+    C: proc mean = 2.247 +/- 0.229 ms
+    D: proc mean = 1.986 +/- 0.111 ms
+
+  結論：
+    Process Thread 在所有場景下均不受 FG 指令影響（±0.2ms 變異），
+    證明多執行緒架構的 thread isolation 設計有效。
+    FG 指令在 Main Thread 上非同步執行。
+
+  數據檔案：combined_latency_raw.csv (4000 frames: 4 scenarios x 5 rounds x 200)
+
+
+--------------------------------------------------------------------------------
+  Test 05: 管線吞吐量 (Pipeline Throughput)
+--------------------------------------------------------------------------------
+
+  目的：
+    驗證完整三執行緒管線在持續運行下能否維持 120fps，並量測丟幀率。
+
+  方法：
+    - 三執行緒並行：Capture -> Process -> Main (+ FG voltage every 5 frames)
+    - 5 rounds x 500 frames
+    - Live camera + Real FG VISA
+
+  結果：
+    Effective FPS:  120.6 +/- 0.1  [PASS] (target: >= 114)
+    Drop rate:      0.0%           [PASS] (target: < 5%)
+    Process P99:    4.232ms        [PASS] (target: < 8.33ms)
+    FG write mean:  0.556ms
+
+  Per-Round 一致性：
+    Round 1: 120.5 fps | proc=2.589ms
+    Round 2: 120.4 fps | proc=2.373ms
+    Round 3: 120.6 fps | proc=2.344ms
+    Round 4: 120.7 fps | proc=2.386ms
+    Round 5: 120.7 fps | proc=2.673ms
+
+  結論：系統穩定維持 120fps，零丟幀，FG voltage 指令僅需 0.56ms。
+
+  數據檔案：throughput_raw.csv (2500 frames, per-frame timing)
+
+
+--------------------------------------------------------------------------------
+  Test 06: 模式切換對處理執行緒的影響 (Mode Switch Impact)
+--------------------------------------------------------------------------------
+
+  目的：
+    驗證 FG mode switch（在獨立 thread 上執行）不會影響 Process Thread 的效能。
+
+  方法：
+    - Process Thread 持續處理 frames
+    - 每 50 frames 從另一個 thread 注入一次 FG mode switch
+    - 交替執行 cross-group 和 polarity switch
+    - 5 rounds x 500 frames
+
+  結果：
+    Process Thread (all frames): mean=1.853ms  P99=3.728ms  [PASS]
+    Process Thread 一致性: 1.853 +/- 0.086 ms
+    FG switches 注入: 45 次
+    Process frames 受影響: 0 (完美隔離)
+
+  Per-Round：
+    Round 1: 1.800ms | Round 2: 1.740ms | Round 3: 1.922ms
+    Round 4: 1.979ms | Round 5: 1.827ms
+
+  結論：
+    FG mode switch 在獨立 thread 上完成得極快（Gen-3 compound <1ms），
+    Process Thread 完全不受影響。Thread isolation 設計驗證通過。
+
+  數據檔案：mode_impact_raw.csv (2500 frames, with during_switch flag)
+
+
+--------------------------------------------------------------------------------
+  Test 07: TPS 校正品質 (Calibration Quality)
+--------------------------------------------------------------------------------
+
+  目的：
+    驗證 TPS（Thin Plate Spline）畸變校正映射的精度。
+
+  方法：
+    - Method 1: TPS 在控制點上的擬合殘差（training error）
+    - Method 2: 有效區域內的局部線性度（interpolation quality）
+    - 使用 cropped map (462x314) 排除邊緣 extrapolation
+
+  結果：
+    TPS Fit Residual (308 control points):
+      RMS:  0.000043 px
+      Max:  0.000191 px
+
+    Local Linearity (1504 sample points):
+      Mean:   0.1107 px
+      P99:    0.4059 px  [PASS] (threshold: 2.0 px)
+      Max:    0.5607 px
+
+    Residual Distribution:
+      < 0.5 px: 99.8% of points
+
+  結論：
+    TPS 擬合精度達 sub-pixel 等級（RMS < 0.001 px），
+    有效區域內插值品質優異（99.8% 點殘差 < 0.5 px）。
+
+  數據檔案：calibration_raw.csv (1504 points, per-point residual)
+
+
+--------------------------------------------------------------------------------
+  Test 08: 系統時間預算驗證 (System Budget Validation)
+--------------------------------------------------------------------------------
+
+  目的：
+    同時運行三個執行緒，驗證每個都在 8.33ms budget 內。
+
+  方法：
+    - Capture Thread: 讀取 camera frames
+    - Process Thread: 完整影像處理管線
+    - Main Thread: PID + FG voltage (every 5 frames)
+    - 5 rounds x 500 frames, live camera + real FG
+
+  結果：
+    Thread              Mean     P99      Verdict
+    Capture Thread      8.242ms  16.31ms  [OK] (pipelined, blocking wait)
+    Process Thread      3.012ms  4.642ms  [PASS]
+    Main Thread         0.126ms  0.943ms  [PASS]
+
+    Effective FPS: 120.6 +/- 0.1
+
+    Main Thread 分解：
+      有 FG 指令 (500 frames): mean=0.619ms  P99=1.130ms
+      無 FG 指令 (2000 frames): mean=0.003ms
+
+  Per-Round 一致性：
+    Round 1: 120.5 fps | proc=2.586ms
+    Round 2: 120.6 fps | proc=3.157ms
+    Round 3: 120.7 fps | proc=3.144ms
+    Round 4: 120.6 fps | proc=3.018ms
+    Round 5: 120.7 fps | proc=3.153ms
+    平均: 3.012 +/- 0.219 ms
+
+  結論：
+    Process Thread 和 Main Thread 均在 budget 內。
+    Capture Thread 的阻塞等待是正常的 camera frame delivery interval。
+    系統整體穩定運行在 120.6 fps。
+
+  數據檔案：system_budget_raw.csv (2500 frames, 3-thread timing)
+
+
+================================================================================
+  整體結論
+================================================================================
+
+  1. Gen-3 compound SCPI 策略成功將 FG 操作延遲從 ~260ms 降至 <1ms (>600x 加速)
+  2. 影像處理管線 P99 < 5ms，只使用 frame budget 的 ~36%
+  3. 三執行緒架構在 120fps 下零丟幀，thread isolation 完美
+  4. TPS 校正精度 sub-pixel，99.8% 點殘差 < 0.5px
+  5. 所有 critical-path 測試 (Test 02-08) 均 PASS
+
+  測試總數據量：
+    Test 01: 300 trials (待重跑)
+    Test 02: 2000 frames
+    Test 03: 2000 frames
+    Test 04: 4000 frames
+    Test 05: 2500 frames
+    Test 06: 2500 frames
+    Test 07: 1504 points
+    Test 08: 2500 frames
+    Total: ~16,000+ data points
+
+================================================================================

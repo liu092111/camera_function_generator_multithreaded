@@ -50,7 +50,7 @@ class UndistortCorrector:
             bool: 是否成功載入
         """
         if not os.path.exists(self.calibration_path):
-            print(f"✗ 校正數據檔案不存在: {self.calibration_path}")
+            print(f"[FAIL] 校正數據檔案不存在: {self.calibration_path}")
             return False
         
         try:
@@ -63,12 +63,12 @@ class UndistortCorrector:
             elif 'mtx' in data and 'dist' in data:
                 return self._load_traditional_calibration(data)
             else:
-                print(f"✗ 無法識別校正數據格式: {self.calibration_path}")
+                print(f"[FAIL] 無法識別校正數據格式: {self.calibration_path}")
                 print(f"  可用的鍵值: {list(data.keys())}")
                 return False
             
         except Exception as e:
-            print(f"✗ 載入校正數據失敗: {e}")
+            print(f"[FAIL] 載入校正數據失敗: {e}")
             return False
     
     def _load_tps_calibration(self, data):
@@ -116,7 +116,7 @@ class UndistortCorrector:
         self.img_size = (self.map1.shape[1], self.map1.shape[0])
         self.is_initialized = True
         
-        print(f"✓ 已載入 TPS 校正映射表: {self.calibration_path}")
+        print(f"[OK] 已載入 TPS 校正映射表: {self.calibration_path}")
         print(f"  模式: {'裁切版（推薦）' if self.use_cropped else '完整版'}")
         print(f"  輸出尺寸: {self.img_size[0]}x{self.img_size[1]}")
         if self.valid_region:
@@ -141,7 +141,7 @@ class UndistortCorrector:
         if 'reprojection_error' in data:
             self.reprojection_error = float(data['reprojection_error'])
         
-        print(f"✓ 已載入傳統相機校正數據: {self.calibration_path}")
+        print(f"[OK] 已載入傳統相機校正數據: {self.calibration_path}")
         print(f"  相機矩陣 fx={self.mtx[0,0]:.1f}, fy={self.mtx[1,1]:.1f}")
         print(f"  畸變係數 k1={self.dist[0,0]:.4f}, k2={self.dist[0,1]:.4f}")
         if self.reprojection_error is not None:
@@ -162,7 +162,7 @@ class UndistortCorrector:
             return True
             
         if self.mtx is None or self.dist is None:
-            print("✗ 請先載入校正數據")
+            print("[FAIL] 請先載入校正數據")
             return False
         
         self.img_size = img_size
@@ -182,7 +182,7 @@ class UndistortCorrector:
         )
         
         self.is_initialized = True
-        print(f"✓ 校正映射表已初始化 ({w}x{h})")
+        print(f"[OK] 校正映射表已初始化 ({w}x{h})")
         
         if self.roi[2] > 0 and self.roi[3] > 0:
             print(f"  有效區域: x={self.roi[0]}, y={self.roi[1]}, "

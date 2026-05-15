@@ -1,0 +1,57 @@
+================================================================================
+  Test 02: 影像處理管線逐幀延遲測試
+  Process Thread Per-Frame Pipeline Benchmark
+  測試日期：2026-05-14
+================================================================================
+
+  目的：
+    驗證影像處理管線能否在 8.33ms frame budget 內完成單幀處理。
+
+  設備：
+    - 攝影機：Arducam B0332 (OV9281, global shutter, 640x480 @ 120fps, MJPG)
+    - 校正：TPS rectification map (462x314 output)
+    - Host PC: Windows, Python 3.14, OpenCV 4.13
+
+  處理管線步驟：
+    1. Undistort (TPS remap, cv2.remap with float32 maps)
+    2. Rotate 90 + Flip (vertical + horizontal)
+    3. Kalman Predict (4-state: x, y, vx, vy)
+    4. HSV Mask + Morphology + Contour Detection (findContours + minAreaRect)
+    5. Kalman Correct + EMA smoothing
+    6. Draw Overlay (polylines + circle + putText)
+
+  測試量：
+    - Offline: 500 synthetic frames (single pass)
+    - Online: 500 live camera frames (single pass)
+    - Online: 5 rounds x 200 frames (multi-round)
+    - 合計: 2000 frames
+
+  結果：
+    模式              Mean      P99       Verdict
+    Offline (500)     1.177ms   2.466ms   PASS
+    Online single     1.733ms   3.164ms   PASS
+    Online 5-round    1.709ms   3.569ms   PASS
+
+  Per-Step 分解（Online, 1000 frames 平均）：
+    Undistort (TPS)      0.700ms  (41%)
+    HSV + Morphology     0.755ms  (44%)
+    Rotate + Flip        0.170ms  (10%)
+    Draw Overlay         0.059ms  (3%)
+    Kalman + EMA         0.024ms  (1%)
+    Total                1.709ms  (100%)
+
+  Per-Round 一致性：
+    Round 1: 1.813ms | Round 2: 1.684ms | Round 3: 1.704ms
+    Round 4: 1.655ms | Round 5: 1.687ms
+    平均: 1.709 +/- 0.055 ms
+
+  Budget 利用率：
+    使用: 1.709ms / 8.33ms = 20.5%
+    餘裕: 6.62ms (79.5%)
+
+  結論：
+    管線僅使用 frame budget 的 21%，留有充足餘裕。
+    兩大步驟（Undistort + HSV）佔 85%，是未來優化的主要目標。
+
+  數據檔案：process_thread_raw.csv (2000 frames, 6-step per-frame timing)
+================================================================================
