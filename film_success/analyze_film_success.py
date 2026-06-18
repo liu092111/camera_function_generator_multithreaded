@@ -994,19 +994,22 @@ def _plot_trajectory_boxes(df, box_rec, mm_per_px, x0, y0, out_dir, stem, cut,
 
     # 8 個等間隔時間點，畫固定 device 尺寸的外框（中心=追蹤質心，朝向=追蹤角度）
     valid = np.where(np.isfinite(x) & np.isfinite(y))[0]
+    box_pts = []
     if len(valid) >= 8:
         idxs = valid[np.linspace(0, len(valid) - 1, 8, dtype=int)]
         for k in idxs:
             rect = _device_rect_mm(x[k], y[k], ang[k], olg, osh, lmm, smm)
             ax.plot(rect[:, 0], rect[:, 1], "--", lw=1.5,
                     color=(0.5, 0.7, 1.0), alpha=0.85)
+            box_pts.extend(rect.tolist())
     vp = np.vstack([x, y]).T
     vp = vp[~np.isnan(vp).any(axis=1)]
     if len(vp):
         ax.scatter([vp[0, 0]], [vp[0, 1]], s=110, c="green", zorder=5, label="Start")
         ax.scatter([vp[-1, 0]], [vp[-1, 1]], s=110, c="red", zorder=5, label="End")
-    # 座標範圍只用軌跡點算（與 position 圖一致），不納入外框頂點，避免被撐大
-    xlo, xhi, ylo, yhi = _square_limits(x, y)
+    # 座標範圍納入 device 外框頂點：位移小的影片（如原地旋轉）框比軌跡大，
+    # 只用軌跡點算會讓框超出畫面罩不住，故把框頂點也納入確保完整顯示。
+    xlo, xhi, ylo, yhi = _square_limits(x, y, extra_pts=box_pts)
     ax.set_xlim(xlo, xhi); ax.set_ylim(ylo, yhi)
     ax.invert_yaxis()    # 與 position 圖一致：反向 y 軸符合相機視角
     ax.set_aspect("equal", adjustable="box")
@@ -1089,28 +1092,19 @@ def _make_camera_composite(video_path, df, mm_per_px, out_dir, stem, fps, cfg,
                 pts.append((int(round(xpx[k])), int(round(ypx[k]))))
         for i in range(1, len(pts)):
             cv2.line(frame, pts[i - 1], pts[i], (255, 0, 0), 2)
-        # 過去 snapshot 點：小灰點（淡化，不畫框，避免一堆殘留框看起來像選錯）
-        # 有標註時用標註中心（與當前框同一基準），避免歷史點與框基準不一致看起來像選錯
-        for j in range(si):
+        # 累積外框：畫「目前及之前」所有 snapshot 的 device 外框（淺藍），
+        # 與先前版本一致，可看出 device 沿軌跡的逐步移動/旋轉。
+        LIGHT_BLUE = (255, 200, 150)   # BGR 淺藍
+        for j in range(si + 1):
             pf = int(snap_frames[j])
-            if pf in anno_quad:
-                q = anno_quad[pf]
-                gx, gy = int(q[:, 0].mean()), int(q[:, 1].mean())
-            else:
+            if pf in anno_quad:                      # 有標註：直接畫你標的 4 角
+                bq = anno_quad[pf]
+            else:                                    # 無標註：用偵測+9×6mm 框
                 kk = sel[j]
-                gx, gy = int(round(xpx[kk])), int(round(ypx[kk]))
-            cv2.circle(frame, (gx, gy), 4, (180, 180, 180), -1)
-        # 只畫「當下時間點」的 device 外框 + 中心點（清楚顯示此刻框住 device）
-        if int(fnum) in anno_quad:
-            # 直接畫你標的 4 角四邊形（你的真值）；中心 = 4 角質心
-            quad = anno_quad[int(fnum)]
-            cx, cy = int(round(quad[:, 0].mean())), int(round(quad[:, 1].mean()))
-            cv2.polylines(frame, [quad], True, (0, 200, 255), 2)
-        else:
-            cx, cy = int(round(xpx[k0])), int(round(ypx[k0]))
-            box = device_box_px(xpx[k0], ypx[k0], ang[k0])
-            cv2.polylines(frame, [box], True, (0, 200, 255), 2)
-        cv2.circle(frame, (cx, cy), 6, (255, 0, 0), -1)
+                bq = device_box_px(xpx[kk], ypx[kk], ang[kk])
+            bcx, bcy = int(round(bq[:, 0].mean())), int(round(bq[:, 1].mean()))
+            cv2.polylines(frame, [bq], True, LIGHT_BLUE, 2)
+            cv2.circle(frame, (bcx, bcy), 5, (255, 0, 0), -1)
         # 標註（右下，黑底）：時間 + device 框實體尺寸
         h, w = frame.shape[:2]
         font = cv2.FONT_HERSHEY_SIMPLEX
