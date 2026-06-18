@@ -1,0 +1,56 @@
+{
+  "video": "IMG_6750.MOV",
+  "fps": 30.0,
+  "device_long_mm": 9.0,
+  "device_short_mm": 6.0,
+  "frames": [
+    {
+      "i": 0,
+      "frame": 0,
+      "t_s": 0.0,
+      "file": "frame_0_t0.00.png"
+    },
+    {
+      "i": 1,
+      "frame": 30,
+      "t_s": 1.0,
+      "file": "frame_1_t1.00.png"
+    },
+    {
+      "i": 2,
+      "frame": 61,
+      "t_s": 2.033333333333333,
+      "file": "frame_2_t2.03.png"
+    },
+    {
+      "i": 3,
+      "frame": 91,
+      "t_s": 3.033333333333333,
+      "file": "frame_3_t3.03.png"
+    },
+    {
+      "i": 4,
+      "frame": 122,
+      "t_s": 4.066666666666666,
+      "file": "frame_4_t4.07.png"
+    },
+    {
+      "i": 5,
+      "frame": 152,
+      "t_s": 5.066666666666666,
+      "file": "frame_5_t5.07.png"
+    },
+    {
+      "i": 6,
+      "frame": 183,
+      "t_s": 6.1,
+      "file": "frame_6_t6.10.png"
+    },
+    {
+      "i": 7,
+      "frame": 214,
+      "t_s": 7.133333333333334,
+      "file": "frame_7_t7.13.png"
+    }
+  ]
+}
