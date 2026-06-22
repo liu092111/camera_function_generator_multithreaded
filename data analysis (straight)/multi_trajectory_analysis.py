@@ -38,6 +38,96 @@ MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 STARTUP_SPEED_THRESHOLD = 10.0  # 啟動速度閾值 (mm/s)，速度超過此值視為已啟動
 
 
+def _legend_overlaps_data(ax, legend, renderer):
+    """檢查 legend 框是否與任何資料線重疊（皆換算到資料座標後比較）。
+
+    只檢查真正的資料線（label 不以 '_' 開頭者），略過 axvline/axhline
+    等輔助線與無 label 的物件。
+
+    Returns:
+        True 表示 legend 壓到資料，需要騰出空白；False 表示沒有重疊。
+    """
+    lbox = legend.get_window_extent(renderer)
+    inv = ax.transData.inverted()
+    # legend 四角換算到資料座標（取 min/max 以涵蓋座標軸方向反轉的情況）
+    (x0, y0) = inv.transform((lbox.x0, lbox.y0))
+    (x1, y1) = inv.transform((lbox.x1, lbox.y1))
+    lxmin, lxmax = min(x0, x1), max(x0, x1)
+    lymin, lymax = min(y0, y1), max(y0, y1)
+
+    for line in ax.get_lines():
+        label = line.get_label()
+        if not label or label.startswith("_"):
+            continue
+        xd = np.asarray(line.get_xdata(), dtype=float)
+        yd = np.asarray(line.get_ydata(), dtype=float)
+        m = np.isfinite(xd) & np.isfinite(yd)
+        if np.any((xd[m] >= lxmin) & (xd[m] <= lxmax) &
+                  (yd[m] >= lymin) & (yd[m] <= lymax)):
+            return True
+    return False
+
+
+def add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14,
+                             top_margin=0.05, keep_square=False, **legend_kwargs):
+    """在繪圖區內放置 legend，並自動向上延伸 y 軸騰出空白帶，避免 legend 遮住資料。
+
+    作法：先畫出 legend，量測它在顯示座標上佔了 axes 高度的多少比例 f，
+    再把 y 軸上界往上拉，使原始資料只佔據下方 (1 - f - top_margin) 的高度，
+    legend 則落在上方空白帶中。
+
+    對等比例（aspect='equal'）的圖，延伸 ylim 會改變圖框高度，連帶改變 f，
+    因此用數次迭代讓結果收斂。
+
+    Args:
+        fig, ax: matplotlib Figure / Axes
+        loc: legend 位置（應為上方類，例如 "upper left" / "upper center"）
+        fontsize: legend 字體大小
+        top_margin: legend 與資料之間額外保留的空白比例
+        keep_square: 若為 True，延伸 y 軸的同時把 x 軸設成相同範圍（資料置中），
+                     使等比例（aspect='equal'）的圖維持正方形框格。
+        legend_kwargs: 其餘傳給 ax.legend 的參數
+
+    Returns:
+        legend 物件
+    """
+    legend = ax.legend(loc=loc, fontsize=fontsize, framealpha=0.9, **legend_kwargs)
+
+    # 先判斷 legend 是否真的壓到資料；沒壓到就保持原本軸範圍，不做任何延伸
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    if not _legend_overlaps_data(ax, legend, renderer):
+        return legend
+
+    # 以「目前 y 軸範圍」作為資料實際跨度的基準（ymin 固定，只往上延伸）
+    ymin, ymax0 = ax.get_ylim()
+    data_range = ymax0 - ymin
+    if data_range <= 0:
+        return legend
+
+    # 正方形模式：記住目前 x 軸中心，延伸後讓 x 範圍 = y 範圍並置中
+    xmin0, xmax0 = ax.get_xlim()
+    xc = 0.5 * (xmin0 + xmax0)
+
+    for _ in range(6):
+        fig.canvas.draw()  # 觸發 renderer，才能取得 legend 的實際像素尺寸
+        renderer = fig.canvas.get_renderer()
+        legend_h = legend.get_window_extent(renderer).height
+        axes_h = ax.get_window_extent(renderer).height
+        if axes_h <= 0:
+            break
+        f = legend_h / axes_h
+        # 資料可用的高度比例（保底 0.15，避免 legend 過大時把資料壓扁）
+        avail = max(0.15, 1.0 - f - top_margin)
+        new_range = data_range / avail
+        ax.set_ylim(ymin, ymin + new_range)
+        if keep_square:
+            # x 範圍設成與 y 相同並置中，等比例下即為正方形框格
+            ax.set_xlim(xc - 0.5 * new_range, xc + 0.5 * new_range)
+
+    return legend
+
+
 def detect_startup_index(speed_data, threshold=None):
     """
     檢測啟動時間點的索引
@@ -149,14 +239,17 @@ def load_csv_files(folder_path):
     return data_dict
 
 
-def plot_multi_trajectories(data_dict, output_path, title="Position Comparison"):
+def plot_multi_trajectories(data_dict, output_path, title="Position Comparison",
+                            show_stats=True):
     """
     繪製多軌跡比較圖
-    
+
     Args:
         data_dict: {檔案名稱: DataFrame} 字典
         output_path: 輸出圖片路徑
         title: 圖表標題
+        show_stats: 是否在 legend 標籤中附上統計數值（Avg/Max/Offset）。
+                    設為 False 時，legend 只顯示材料名稱（簡化版）。
     """
     if not data_dict:
         print("沒有資料可繪製")
@@ -164,7 +257,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison")
     
     # 創建圖表
     fig, ax = plt.subplots(1, 1, figsize=(9, 9))
-    
+
     # 設定顏色循環
     colors = plt.cm.tab10.colors  # 使用 tab10 色盤
     
@@ -196,34 +289,35 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison")
         # 選擇顏色
         color = colors[i % len(colors)]
         
-        # 計算統計資訊
-        avg_speed = max_speed = avg_offset = None
-        
-        if "speed_mm_s" in df.columns:
-            speed = df["speed_mm_s"].to_numpy()
-            speed_valid = speed[np.isfinite(speed)]
-            if len(speed_valid) > 0:
-                avg_speed = np.mean(speed_valid)
-                max_speed = np.max(speed_valid)
-        
-        if "angle_deg_unwrapped" in df.columns:
-            angle = df["angle_deg_unwrapped"].to_numpy()
-            angle_valid = angle[np.isfinite(angle)]
-            if len(angle_valid) > 0:
-                avg_offset = np.mean(np.abs(angle_valid - angle_valid[0]))
-        
-        # 構建 legend 標籤（包含統計資訊）
-        stat_parts = []
-        if avg_speed is not None:
-            stat_parts.append(f"Avg={avg_speed:.1f}")
-        if max_speed is not None:
-            stat_parts.append(f"Max={max_speed:.1f} mm/s")
-        if avg_offset is not None:
-            stat_parts.append(f"Offset={avg_offset:.1f}°")
-        
-        if stat_parts:
-            label = f"{name} ({', '.join(stat_parts)})"
+        # 構建 legend 標籤
+        if show_stats:
+            # 計算統計資訊
+            avg_speed = max_speed = avg_offset = None
+
+            if "speed_mm_s" in df.columns:
+                speed = df["speed_mm_s"].to_numpy()
+                speed_valid = speed[np.isfinite(speed)]
+                if len(speed_valid) > 0:
+                    avg_speed = np.mean(speed_valid)
+                    max_speed = np.max(speed_valid)
+
+            if "angle_deg_unwrapped" in df.columns:
+                angle = df["angle_deg_unwrapped"].to_numpy()
+                angle_valid = angle[np.isfinite(angle)]
+                if len(angle_valid) > 0:
+                    avg_offset = np.mean(np.abs(angle_valid - angle_valid[0]))
+
+            stat_parts = []
+            if avg_speed is not None:
+                stat_parts.append(f"Avg={avg_speed:.1f}")
+            if max_speed is not None:
+                stat_parts.append(f"Max={max_speed:.1f} mm/s")
+            if avg_offset is not None:
+                stat_parts.append(f"Offset={avg_offset:.1f}°")
+
+            label = f"{name} ({', '.join(stat_parts)})" if stat_parts else name
         else:
+            # 簡化版：只顯示材料名稱
             label = name
         
         # 繪製平滑後的軌跡
@@ -255,8 +349,10 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison")
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
     #ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=14)
-    
+    # legend 放在繪圖區內左上角，向上延伸 y 軸騰出空白帶避免遮住軌跡，
+    # 並同步調整 x 軸範圍以維持正方形框格（keep_square=True）
+    add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14, keep_square=True)
+
     # 添加圖例說明
     smooth_info = f" (Smoothed: {SMOOTHING_METHOD})" if SMOOTHING_ENABLED else ""
     ax.annotate(f"○ = Start, □ = End{smooth_info}", xy=(0.02, 0.02), xycoords='axes fraction',
@@ -332,11 +428,12 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
     #ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="upper left", fontsize=14)
-    
+    # legend 放在繪圖區內左上角，並向上延伸 y 軸騰出空白帶，避免遮住速度曲線
+    add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
+
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
-    
+
     # 儲存圖表
     fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
@@ -394,7 +491,8 @@ def plot_multi_speed_simple(data_dict, output_path, title="Speed Comparison (Sim
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
     #ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="upper left", fontsize=14)
+    # legend 放在繪圖區內左上角，並向上延伸 y 軸騰出空白帶，避免遮住速度曲線
+    add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
     
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
@@ -466,7 +564,8 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
     from matplotlib.ticker import MultipleLocator
     ax.yaxis.set_major_locator(MultipleLocator(5))
     #ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend(loc="best", fontsize=14)
+    # legend 放在繪圖區內左上角，並向上延伸 y 軸騰出空白帶，避免遮住角度曲線
+    add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
     
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
@@ -606,7 +705,7 @@ def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory De
     ax1.set_ylabel("Instantaneous Heading (°)", fontsize=20, labelpad=12)
     ax1.set_title("Instantaneous Heading Deviation from Vertical", fontsize=20, pad=15)
     ax1.tick_params(axis='both', which='major', labelsize=14)
-    ax1.legend(loc="best", fontsize=12)
+    add_legend_with_headroom(fig, ax1, loc="upper left", fontsize=12)
     ax1.annotate("0° = Moving vertically, + = Right, − = Left", xy=(0.02, 0.02),
                  xycoords='axes fraction', fontsize=11, color='gray')
     
@@ -616,7 +715,7 @@ def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory De
     ax2.set_ylabel("Cumulative Deviation Angle (°)", fontsize=20, labelpad=12)
     ax2.set_title("Cumulative Direction from Start vs Vertical", fontsize=20, pad=15)
     ax2.tick_params(axis='both', which='major', labelsize=14)
-    ax2.legend(loc="best", fontsize=12)
+    add_legend_with_headroom(fig, ax2, loc="upper left", fontsize=12)
     
     # --- 設定子圖 3 樣式 (橫向偏移) ---
     ax3.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
@@ -624,7 +723,7 @@ def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory De
     ax3.set_ylabel("Lateral Offset (mm)", fontsize=20, labelpad=12)
     ax3.set_title("Lateral Drift vs Vertical Travel Distance", fontsize=20, pad=15)
     ax3.tick_params(axis='both', which='major', labelsize=14)
-    ax3.legend(loc="best", fontsize=12)
+    add_legend_with_headroom(fig, ax3, loc="upper left", fontsize=12)
     
     # 調整佈局
     plt.tight_layout(pad=2.5)
@@ -713,12 +812,12 @@ def main():
     print("=" * 60)
     print("多軌跡分析工具")
     print("=" * 60)
-    
+
     # 取得腳本所在目錄
     script_dir = os.path.dirname(os.path.abspath(__file__))
     csv_folder = os.path.join(script_dir, CSV_FOLDER)
     output_folder = script_dir
-    
+
     print(f"\n讀取 CSV 檔案資料夾: {csv_folder}")
     
     # 載入所有 CSV 檔案
@@ -740,7 +839,12 @@ def main():
     
     trajectory_output = os.path.join(output_folder, "position_comparison.png")
     plot_multi_trajectories(data_dict, trajectory_output, title="Position Comparison")
-    
+
+    # 繪製簡化版軌跡比較圖（legend 只顯示材料名稱，不含 Avg/Max/Offset 數值）
+    trajectory_simple_output = os.path.join(output_folder, "position_comparison_simple.png")
+    plot_multi_trajectories(data_dict, trajectory_simple_output,
+                            title="Position Comparison", show_stats=False)
+
     # 繪製速度比較圖
     speed_output = os.path.join(output_folder, "speed_comparison.png")
     plot_multi_speed_comparison(data_dict, speed_output, title="Speed Comparison")
