@@ -10,7 +10,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
 
 import numpy as np
 import pandas as pd
@@ -74,7 +74,7 @@ def fig00():
     ax.set_ylim(0, 100)
     ax.axis("off")
 
-    def box(x, y, w, h, text, fc="#eef2f7", ec="#33485f", fs=11,
+    def box(x, y, w, h, text, fc="#f2f2f2", ec="#454545", fs=11,
             weight="normal", tc="#1a1a1a"):
         p = FancyBboxPatch((x, y), w, h,
                            boxstyle="round,pad=0.3,rounding_size=0.8",
@@ -86,7 +86,7 @@ def fig00():
     def arrow(x, y0, y1):
         ax.add_patch(FancyArrowPatch((x, y0), (x, y1),
                      arrowstyle="-|>", mutation_scale=16,
-                     linewidth=1.6, color="#33485f"))
+                     linewidth=1.6, color="#454545"))
 
     # Title
     ax.text(50, 98, "Combined Latency Benchmark", ha="center", va="top",
@@ -111,7 +111,7 @@ def fig00():
     for i, t in enumerate(proc_boxes):
         y = top - i * (bh + gap)
         ys.append(y)
-        box(lx, y, lw, bh, t, fc="#e7f0ea", ec=COLORS["green"], fs=11)
+        box(lx, y, lw, bh, t, fc="#eeeeee", ec=COLORS["green"], fs=11)
     for i in range(len(proc_boxes) - 1):
         arrow(lx + lw / 2, ys[i] - 0.2, ys[i + 1] + bh + 0.2)
 
@@ -135,18 +135,18 @@ def fig00():
     # Control decision -> FG command dispatch
     cw = 24
     cx = rx + (rw - cw) / 2
-    box(cx, 79.5, cw, 5.5, "Control Decision", fc="#faf0e2", ec=COLORS["tan"])
+    box(cx, 79.5, cw, 5.5, "Control Decision", fc="#f1f1f1", ec=COLORS["tan"])
     arrow(cx + cw / 2, 79.3, 75.2)
-    box(cx, 69.5, cw, 5.5, "FG Command Dispatch", fc="#faf0e2", ec=COLORS["tan"])
+    box(cx, 69.5, cw, 5.5, "FG Command Dispatch", fc="#f1f1f1", ec=COLORS["tan"])
 
     # Sub-header
     ax.text(rx + 1, 64.5, "4 Test Scenarios:", ha="left", va="center",
             fontsize=12, fontweight="bold", color="#222222")
 
     scen_data = [
-        ("A: Voltage Adjust",      "PID routine — SOUR:VOLT X", COLORS["green"], "#e7f0ea"),
-        ("B: Same-Group Switch",   "OFF;POL;ON;*WAI",                COLORS["blue"],  "#e7eff5"),
-        ("C: Cross-Group Switch",  "Full compound waveform switch",  COLORS["purple"], "#efeaf5"),
+        ("A: Voltage Adjust",      "PID routine — SOUR:VOLT X", COLORS["green"], "#eeeeee"),
+        ("B: Same-Group Switch",   "OFF;POL;ON;*WAI",                COLORS["blue"],  "#eeeeee"),
+        ("C: Cross-Group Switch",  "Full compound waveform switch",  COLORS["purple"], "#ececec"),
         ("D: Baseline (No FG)",    "Process only — control group", COLORS["grey"], "#eeeeee"),
     ]
     sbh = 9.0
@@ -271,10 +271,10 @@ def fig02():
 # ======================================================================
 def fig03():
     fig, ax = plt.subplots(figsize=(9, 6))
-    for s in SCEN_ORDER:
+    for i, s in enumerate(SCEN_ORDER):
         v = np.sort(ST[s]["proc"])
         cdf = np.arange(1, len(v) + 1) / len(v)
-        ax.plot(v, cdf, color=COLOR[s], linewidth=2.0,
+        ax.plot(v, cdf, color=COLOR[s], linewidth=2.0, linestyle=line_style(i),
                 label=f"{LABEL[s]} (mean={ST[s]['proc_mean']:.2f} ms)")
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_ylabel("CDF")

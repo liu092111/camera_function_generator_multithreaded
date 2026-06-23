@@ -8,7 +8,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
 
 import numpy as np
 import pandas as pd
@@ -126,15 +126,15 @@ def fig00b():
             ha="center", va="top", fontsize=11.5, style="italic", color="#555555")
 
     panels = [
-        ("Mode A: Offline", "#dbe7f3",
+        ("Mode A: Offline", "#e5e5e5",
          ["500 synthetic frames (pre-generated grayscale images)",
           "No camera I/O - isolates pure computation cost",
           "Purpose: Establish processing baseline without hardware variance"]),
-        ("Mode B: Online Single-Pass", "#dcecdf",
+        ("Mode B: Online Single-Pass", "#e8e8e8",
          ["500 live camera frames (Arducam B0332 @ 120 fps, MJPG)",
           "Single continuous acquisition run",
           "Purpose: Measure real-world latency including OS scheduling jitter"]),
-        ("Mode C: Online Multi-Round", "#f1e3cf",
+        ("Mode C: Online Multi-Round", "#e5e5e5",
          ["5 rounds x 200 frames (total 1000 frames)",
           "Inter-round pause and pipeline restart between each round",
           "Purpose: Verify temporal consistency and repeatability"]),
@@ -228,6 +228,7 @@ def fig02():
         y = np.arange(1, n + 1) / n * 100.0
         mean = vals.mean()
         ax.plot(vals, y, color=ramp[ri], linewidth=1.8,
+                linestyle=line_style(ri),
                 label=f"Round {r} (µ={mean:.3f}, n={n})")
     ax.set_xlabel("Total Processing Time (ms)")
     ax.set_ylabel("Cumulative Percentage (%)")
@@ -257,11 +258,11 @@ def fig03():
     fig, ax = plt.subplots(figsize=(9, 5.5))
     x = np.arange(len(rounds))
     bars = ax.bar(x, means, 0.55, yerr=stds, color=COLORS["blue"],
-                  edgecolor="#27496d", linewidth=0.6, capsize=4,
+                  edgecolor="#444444", linewidth=0.6, capsize=4,
                   error_kw=dict(elinewidth=1.0, ecolor="#333333"),
                   label="Mean +/- Std")
     ax.scatter(x, p99s, marker="D", s=60, color=COLORS["red"], zorder=5,
-               label="P99", edgecolor="#7a1f15", linewidth=0.5)
+               label="P99", edgecolor="#323232", linewidth=0.5)
 
     # value labels above P99 markers
     for xi, (m, p) in enumerate(zip(means, p99s)):
@@ -303,7 +304,7 @@ def fig04():
 
     fig, ax = plt.subplots(figsize=(9, 5))
     y = np.arange(len(labels))
-    ax.barh(y, vals, color=COLORS["blue"], edgecolor="#27496d", linewidth=0.6)
+    ax.barh(y, vals, color=COLORS["blue"], edgecolor="#444444", linewidth=0.6)
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
     ax.set_xlabel("Mean Processing Time (ms)")
@@ -331,7 +332,7 @@ def fig05():
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
     counts, _, _ = ax.hist(v, bins=bins, color=COLORS["blue2"],
-                           edgecolor="#27496d", linewidth=0.5)
+                           edgecolor="#444444", linewidth=0.5)
     ax.axvline(p99, color=COLORS["red"], linestyle="--", linewidth=1.8)
     ymax = counts.max() * 1.12
     ax.set_ylim(0, ymax)

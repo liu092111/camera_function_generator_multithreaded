@@ -63,7 +63,7 @@ def title(ax, main, sub=None, y=96, sub_gap=5.2):
                 fontsize=FS_SUB, style="italic", color="#555555")
 
 
-def box(ax, cx, cy, w, h, t, sub=None, fc="#eef3f9", ec=None,
+def box(ax, cx, cy, w, h, t, sub=None, fc="#f2f2f2", ec=None,
         t_fs=FS_BOXT, s_fs=FS_BOXS, tc="#1a1a1a"):
     """Rounded box centred on (cx, cy) with a bold title and optional sub."""
     ec = ec or COLORS["blue"]
@@ -92,8 +92,11 @@ def harrow(ax, x0, x1, y, color="#555555"):
 
 
 def section(ax, x, y, txt, color=None):
+    # Section headers always render in a dark grey for print legibility;
+    # the per-column colour is ignored because the columns are already
+    # separated spatially (and colour is meaningless in greyscale).
     ax.text(x, y, txt, ha="center", va="center", fontsize=FS_SECTION,
-            fontweight="bold", color=color or COLORS["blue"])
+            fontweight="bold", color="#333333")
 
 
 # ----------------------------------------------------------------------
@@ -107,7 +110,7 @@ def fig01_fg_switching():
     gens = [
         ("Gen-1: Full Re-upload",      "~260 ms / switch", COLORS["tan2"],  COLORS["tan"]),
         ("Gen-2: Preloaded Multi-write", "~2-30 ms / switch", COLORS["row_blue"], COLORS["blue"]),
-        ("Gen-3: Single Compound Write", "< 1 ms / switch",   "#dbe8d9",      COLORS["green"]),
+        ("Gen-3: Single Compound Write", "< 1 ms / switch",   "#e4e4e4",      COLORS["green"]),
     ]
     speed = ["~10x faster", "~5-10x faster"]
     w, h = 62, 14
@@ -132,11 +135,11 @@ def fig02a_pipeline():
 
     stages = [
         ("Input Frame", COLORS["grey_l"], "#444444"),
-        ("TPS Undistort + Rotate", COLORS["blue2"], "#27496d"),
-        ("HSV Detection", COLORS["tan2"], "#9c5a16"),
-        ("Kalman + EMA Smoothing", COLORS["tan2"], "#9c5a16"),
-        ("Draw Overlay", COLORS["blue2"], "#27496d"),
-        ("Output Result", COLORS["pass_green"], "#1f5c3a"),
+        ("TPS Undistort + Rotate", COLORS["blue2"], "#444444"),
+        ("HSV Detection", COLORS["tan2"], "#636363"),
+        ("Kalman + EMA Smoothing", COLORS["tan2"], "#636363"),
+        ("Draw Overlay", COLORS["blue2"], "#444444"),
+        ("Output Result", COLORS["pass_green"], "#4d4d4d"),
     ]
     n = len(stages)
     w, h = 60, 8.5
@@ -160,9 +163,9 @@ def fig02b_conditions():
     title(ax, "Evaluation Conditions", "Three modes for latency characterization")
 
     modes = [
-        ("Mode A: Offline",            "500 synthetic frames (no camera I/O)", "#dbe7f3", COLORS["blue"]),
-        ("Mode B: Online Single-Pass", "500 live camera frames",               "#dcecdf", COLORS["green"]),
-        ("Mode C: Online Multi-Round", "5 rounds x 200 frames",                "#f1e3cf", COLORS["tan"]),
+        ("Mode A: Offline",            "500 synthetic frames (no camera I/O)", "#e5e5e5", COLORS["blue"]),
+        ("Mode B: Online Single-Pass", "500 live camera frames",               "#e8e8e8", COLORS["green"]),
+        ("Mode C: Online Multi-Round", "5 rounds x 200 frames",                "#e5e5e5", COLORS["tan"]),
     ]
     w, h = 78, 16
     cy = [72, 48, 24]
@@ -181,9 +184,9 @@ def fig03_e2e():
           y=94, sub_gap=8)
 
     segs = [
-        ("Capture",  "acquire one frame",     "#dbe7f3", COLORS["blue"]),
-        ("Process",  "TPS + HSV + Kalman",    "#dbe8d9", COLORS["green"]),
-        ("FG Write", "voltage command",       "#f3e7d6", COLORS["tan"]),
+        ("Capture",  "acquire one frame",     "#e5e5e5", COLORS["blue"]),
+        ("Process",  "TPS + HSV + Kalman",    "#e4e4e4", COLORS["green"]),
+        ("FG Write", "voltage command",       "#e8e8e8", COLORS["tan"]),
     ]
     w, h = 28, 24
     cx = [18, 50, 82]
@@ -212,7 +215,7 @@ def fig04_combined():
     lgap = 4.5
     for i, t in enumerate(left):
         cy = ltop - i * (lh + lgap) - lh / 2
-        box(ax, lcx, cy, lw, lh, t, fc="#e7f0ea", ec=COLORS["green"])
+        box(ax, lcx, cy, lw, lh, t, fc="#eeeeee", ec=COLORS["green"])
         if i < len(left) - 1:
             varrow(ax, lcx, cy - lh / 2 - 0.4, cy - lh / 2 - lgap + 0.4,
                    color=COLORS["green"])
@@ -228,9 +231,9 @@ def fig04_combined():
     # Right column: main thread scenarios.
     section(ax, 76, 84, "Main Thread", COLORS["tan"])
     right = [
-        ("A: Voltage Adjust",     COLORS["green"],  "#e7f0ea"),
-        ("B: Same-Group Switch",  COLORS["blue"],   "#e7eff5"),
-        ("C: Cross-Group Switch", COLORS["purple"], "#efeaf5"),
+        ("A: Voltage Adjust",     COLORS["green"],  "#eeeeee"),
+        ("B: Same-Group Switch",  COLORS["blue"],   "#eeeeee"),
+        ("C: Cross-Group Switch", COLORS["purple"], "#ececec"),
         ("D: Baseline (No FG)",   COLORS["grey"],   "#eeeeee"),
     ]
     rw, rh = 38, 11
@@ -252,11 +255,11 @@ def fig05_throughput():
 
     cy = 40
     blocks = [
-        (11, 18, "Capture\nThread",  "#dbe7f3", COLORS["blue"]),
-        (31, 12, "frame\nqueue",     "#eeeeee", "#9aa6b0"),
-        (50, 18, "Process\nThread",  "#e3f0e6", COLORS["green"]),
-        (69, 12, "result\nqueue",    "#eeeeee", "#9aa6b0"),
-        (89, 18, "Main\nThread",     "#f3e7d6", COLORS["tan"]),
+        (11, 18, "Capture\nThread",  "#e5e5e5", COLORS["blue"]),
+        (31, 12, "frame\nqueue",     "#eeeeee", "#a4a4a4"),
+        (50, 18, "Process\nThread",  "#ededed", COLORS["green"]),
+        (69, 12, "result\nqueue",    "#eeeeee", "#a4a4a4"),
+        (89, 18, "Main\nThread",     "#e8e8e8", COLORS["tan"]),
     ]
     h = 30
     for cx, w, t, fc, ec in blocks:
@@ -325,7 +328,7 @@ def fig07_calibration():
     stages = [
         ("Raw Image",        "640 x 480 px",        COLORS["row_blue"], COLORS["blue"]),
         ("TPS Grid Mapping", "308 control points",  COLORS["row_blue"], COLORS["blue"]),
-        ("Rectified Output", "462 x 314 px",        "#dbe8d9",          COLORS["green"]),
+        ("Rectified Output", "462 x 314 px",        "#e4e4e4",          COLORS["green"]),
     ]
     w, h = 27, 22
     cx = [18, 50, 82]
@@ -356,7 +359,9 @@ def fig08_budget():
     cx = [19, 50, 81]
     cy = 50
     for i, (t, sub, ec) in enumerate(threads):
-        box(ax, cx[i], cy, w, h, t, sub, fc="white", ec=ec, tc=ec)
+        # Dark edge + dark title so white-filled boxes stay legible in B/W.
+        box(ax, cx[i], cy, w, h, t, sub, fc="white", ec="#333333",
+            tc="#1a1a1a")
         if i < 2:
             harrow(ax, cx[i] + w / 2 + 0.5, cx[i + 1] - w / 2 - 0.5, cy)
 

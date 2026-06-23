@@ -13,7 +13,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -52,6 +52,7 @@ fg1 = df[df.fg_sent == 1].main_ms
 fg0 = df[df.fg_sent == 0].main_ms
 fg1_mean, fg1_p99, fg1_n = float(fg1.mean()), p(fg1, 99), int(len(fg1))
 fg0_mean, fg0_p99, fg0_n = float(fg0.mean()), p(fg0, 99), int(len(fg0))
+fg1_std, fg0_std = float(fg1.std(ddof=1)), float(fg0.std(ddof=1))
 ratio = fg1_mean / fg0_mean
 
 # Effective FPS: 5 rounds x 500 frames. Capture mean ~ frame interval.
@@ -162,11 +163,15 @@ def fig01():
     order = ["main_ms", "process_ms", "capture_ms"]  # bottom..top after invert
     labels = [stats[c]["name"] for c in order]
     means = [stats[c]["mean"] for c in order]
+    sds = [stats[c]["std"] for c in order]
     p99s = [stats[c]["p99"] for c in order]
     colors = [stats[c]["color"] for c in order]
     ypos = np.arange(len(order))
 
-    ax.barh(ypos, means, color=colors, height=0.55, zorder=2, label="Mean")
+    ax.barh(ypos, means, xerr=sds, capsize=5, color=colors, height=0.55,
+            zorder=2, edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW,
+            error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2,
+                                    capthick=1.2), label="Mean ± Std")
     xmax = max(p99s) * 1.18
     ax.set_xlim(0, xmax)
 
@@ -215,6 +220,7 @@ def fig02():
         s = np.sort(df[df["round"] == r].process_ms.values)
         cdf = np.arange(1, len(s) + 1) / len(s)
         ax.plot(s, cdf, color=ramp[r - 1], lw=2.0,
+                linestyle=line_style(r - 1),
                 label=f"Round {r} (mean={s.mean():.2f} ms)")
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_ylabel("CDF")
@@ -258,11 +264,14 @@ def fig04():
     xpos = [0, 1]
     labels = ["FG Active\n(every 5th frame)", "No FG\n(idle frames)"]
     means = [fg1_mean, fg0_mean]
+    sds = [fg1_std, fg0_std]
     p99s = [fg1_p99, fg0_p99]
     ns = [fg1_n, fg0_n]
     colors = [COLORS["tan"], COLORS["grey"]]
 
-    ax.bar(xpos, means, width=0.5, color=colors, zorder=2)
+    ax.bar(xpos, means, width=0.5, yerr=sds, capsize=5, color=colors, zorder=2,
+           edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW,
+           error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2, capthick=1.2))
     ax.set_xticks(xpos)
     ax.set_xticklabels(labels)
     ax.set_ylabel("Main Thread Latency (ms)")
@@ -333,15 +342,19 @@ def fig05():
     for title, col, color, ax in panels:
         finish(ax)
         means = [df[df["round"] == r][col].mean() for r in rounds]
+        sds = [df[df["round"] == r][col].std(ddof=1) for r in rounds]
         p99s = [p(df[df["round"] == r][col], 99) for r in rounds]
         xp = np.arange(len(rounds))
-        ax.bar(xp, means, width=0.55, color=color, zorder=2)
+        ax.bar(xp, means, width=0.55, yerr=sds, capsize=5, color=color,
+               zorder=2, edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW,
+               error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2,
+                                       capthick=1.2), label="Mean ± Std")
         ax.scatter(xp, p99s, marker="D", s=70, color=COLORS["red"], zorder=5,
                    edgecolors="white", linewidths=0.6, label="P99")
         top = max(p99s) * 1.30
         ax.set_ylim(0, top)
-        for xi, mv, pv in zip(xp, means, p99s):
-            ax.text(xi, mv + 0.02 * top, f"{mv:.2f}", ha="center",
+        for xi, mv, sv, pv in zip(xp, means, sds, p99s):
+            ax.text(xi, mv + sv + 0.02 * top, f"{mv:.2f}", ha="center",
                     va="bottom", fontsize=9.5, fontweight="bold",
                     color="#1a1a1a")
             ax.text(xi + 0.22, pv, f"{pv:.2f}", ha="left", va="center",

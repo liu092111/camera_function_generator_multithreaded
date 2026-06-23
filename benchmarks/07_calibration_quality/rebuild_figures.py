@@ -12,7 +12,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
 
 apply_style()
 
@@ -78,6 +78,7 @@ for i, name in enumerate(ZONE_NAMES):
     s = res[zone_idx == i]
     zone_stats[name] = {
         "mean": s.mean(),
+        "std": s.std(ddof=1),
         "p99": np.percentile(s, 99),
         "n": len(s),
     }
@@ -234,7 +235,8 @@ def fig02():
     ZN = griddata((gx, gy), res, (XI, YI), method="nearest")
     ZI = np.where(np.isnan(ZI), ZN, ZI)
 
-    im = ax.imshow(ZI, origin="upper", cmap="Reds",
+    # Greyscale heatmap: light = low residual, dark = high residual.
+    im = ax.imshow(ZI, origin="upper", cmap="Greys",
                    extent=[gx.min(), gx.max(), gy.max(), gy.min()],
                    aspect="auto", vmin=0, vmax=tps_p99)
 
@@ -258,12 +260,14 @@ def fig03():
     finish(ax)
 
     means = [zone_stats[z]["mean"] for z in ZONE_NAMES]
+    sds = [zone_stats[z]["std"] for z in ZONE_NAMES]
     p99s = [zone_stats[z]["p99"] for z in ZONE_NAMES]
     ns = [zone_stats[z]["n"] for z in ZONE_NAMES]
     x = np.arange(len(ZONE_NAMES))
 
-    ax.bar(x, means, width=0.62, color=COLORS["blue"],
-           edgecolor="#2a4d6e", linewidth=0.8, zorder=2)
+    ax.bar(x, means, width=0.62, yerr=sds, capsize=5, color=COLORS["blue"],
+           edgecolor="#484848", linewidth=0.8, zorder=2,
+           error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2, capthick=1.2))
 
     # P99 diamonds.
     ax.plot(x, p99s, "D", markersize=10, color=COLORS["red"],
@@ -273,9 +277,9 @@ def fig03():
     ymax = max(p99s) * 1.18
     ax.set_ylim(0, ymax)
 
-    for xi, m, p, nn in zip(x, means, p99s, ns):
-        # bold mean label above bar
-        ax.text(xi, m + ymax * 0.012, "%.3f" % m, ha="center", va="bottom",
+    for xi, m, sd, p, nn in zip(x, means, sds, p99s, ns):
+        # bold mean label above the upper error-bar cap
+        ax.text(xi, m + sd + ymax * 0.012, "%.3f" % m, ha="center", va="bottom",
                 fontsize=10.5, fontweight="bold", color="#1a1a1a")
         # red P99 label above diamond
         ax.text(xi, p + ymax * 0.018, "P99 %.3f" % p, ha="center", va="bottom",
@@ -312,9 +316,9 @@ def fig04():
     s_t, c_t = cdf(res)
     s_a, c_a = cdf(aff)
 
-    ax.plot(s_t, c_t, color=COLORS["blue"], lw=2.2,
+    ax.plot(s_t, c_t, color=COLORS["blue"], lw=2.2, linestyle=line_style(0),
             label="TPS (mean=%.3f px)" % tps_mean)
-    ax.plot(s_a, c_a, color=COLORS["tan"], lw=2.2,
+    ax.plot(s_a, c_a, color=COLORS["tan"], lw=2.2, linestyle=line_style(1),
             label="Affine (mean=%.3f px)" % aff_mean)
 
     ax.set_title("Calibration Accuracy: TPS vs Affine Transform")
@@ -347,7 +351,7 @@ def fig05():
     centers = 0.5 * (edges[:-1] + edges[1:])
     width = edges[1] - edges[0]
     ax.bar(centers, counts, width=width * 0.95, color=COLORS["blue2"],
-           edgecolor=COLORS["blue"], linewidth=0.5, zorder=2)
+           edgecolor=BAR_EDGE, linewidth=0.5, zorder=2)
     ax.set_xlabel("Residual (px)")
     ax.set_ylabel("Count")
     ax.set_xlim(0, tps_max * 1.02)

@@ -22,24 +22,77 @@ import matplotlib.pyplot as plt
 
 
 # ----------------------------------------------------------------------
-# Consistent, colour-blind-friendly palette reused across all 8 benchmarks.
+# Greyscale palette reused across all 8 benchmarks (paper / print-safe).
+#
+# The dictionary KEYS keep their original semantic names ("blue", "tan",
+# "green", ...) so none of the per-figure rebuild scripts need to change
+# which key they request; only the underlying greys differ. Distinct
+# categories map to well-separated grey levels (near-black -> light grey)
+# so they remain distinguishable in a black-and-white print.
 # ----------------------------------------------------------------------
 COLORS = {
-    "blue":   "#3b6ea5",   # primary / Gen-3 / mean / process
-    "blue2":  "#7ba6cf",   # lighter blue
-    "tan":    "#d68a3c",   # secondary / Gen-2 / FG / baseline accent
-    "tan2":   "#e3b486",
-    "green":  "#5a9367",   # PASS / voltage / process-thread
-    "purple": "#8a6fae",   # cross-group
-    "red":    "#c0392b",   # P99 markers, thresholds
-    "grey":   "#8c8c8c",   # baseline / annotations
-    "grey_l": "#cfcfcf",
-    # 5-step sequential blue ramp for "per round" series (R1..R5)
-    "ramp5":  ["#1f4e79", "#2e6da4", "#5a93c4", "#8fb9dd", "#c3d9ee"],
-    "header_blue": "#2e5b8a",   # table header fill
-    "row_blue":    "#e8f0f8",   # table zebra row fill
-    "pass_green":  "#2e7d4f",
+    # Fills sit in a LIGHT grey band (~#9e..#d4) so that black (mean +/- std)
+    # error bars and the dark bar outlines remain clearly visible on top of
+    # every bar; series in line/CDF plots are additionally separated by dash
+    # style. Bars get a dark edge (see BAR_EDGE) for a crisp border.
+    "blue":   "#c2c2c2",   # primary / Gen-3 / mean / process  -> light grey
+    "blue2":  "#d4d4d4",   # lighter companion
+    "tan":    "#9e9e9e",   # secondary / Gen-2 / FG accent     -> mid-light grey
+    "tan2":   "#c9c9c9",
+    "green":  "#b0b0b0",   # PASS / voltage / process-thread
+    "purple": "#bdbdbd",   # cross-group
+    "red":    "#000000",   # P99 / threshold emphasis markers   -> black
+    "grey":   "#aeaeae",   # baseline / annotations
+    "grey_l": "#e0e0e0",
+    # 5-step sequential grey ramp for "per round" series (R1..R5). Kept in a
+    # medium band so thin CDF/line strokes stay visible on white; bars that
+    # use this ramp also carry a dark edge.
+    "ramp5":  ["#5a5a5a", "#7d7d7d", "#9a9a9a", "#bcbcbc", "#d6d6d6"],
+    "header_blue": "#404040",   # table header fill (dark grey)
+    "row_blue":    "#ededed",   # table zebra row fill (light grey)
+    "pass_green":  "#7d7d7d",
 }
+
+# Shared dark edge colour + width for bar/patch outlines, so light-grey
+# fills always have a crisp border that frames the black error bars.
+BAR_EDGE = "#1a1a1a"
+BAR_EDGE_LW = 0.9
+
+# ----------------------------------------------------------------------
+# Line-style cycle for figures whose series are distinguished ONLY by
+# colour (CDFs, time-series overlays, per-round line plots). In greyscale
+# the line dash pattern carries the distinction that colour used to.
+# Index into LINE_STYLES with the series number; it wraps via modulo.
+# ----------------------------------------------------------------------
+LINE_STYLES = [
+    "-",                    # solid
+    (0, (5, 2)),            # dashed
+    (0, (1, 1.4)),          # dotted
+    (0, (6, 2, 1, 2)),      # dash-dot
+    (0, (3, 1.5, 1, 1.5, 1, 1.5)),  # dash-dot-dot
+    (0, (8, 3)),            # long dash
+]
+
+
+def line_style(i):
+    """Return a print-distinguishable line style for series index ``i``."""
+    return LINE_STYLES[i % len(LINE_STYLES)]
+
+
+def grey_ramp(n, lo=0.08, hi=0.80):
+    """Return ``n`` evenly spaced grey hex strings from dark (lo) to light (hi).
+
+    Values are matplotlib greyscale levels (0 = black, 1 = white); the
+    default range stays clear of pure black/white so every step is visible.
+    """
+    if n <= 1:
+        return ["#1a1a1a"]
+    out = []
+    for k in range(n):
+        v = lo + (hi - lo) * k / (n - 1)
+        g = int(round(v * 255))
+        out.append(f"#{g:02x}{g:02x}{g:02x}")
+    return out
 
 
 def apply_style():

@@ -15,7 +15,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 from matplotlib.lines import Line2D
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
 
 apply_style()
 
@@ -107,14 +107,14 @@ def fig00():
         ["Gen-3: Compound Single Write",
          "SOUR1:VOLT (X);SOUR2:VOLT (Y)",
          "1 SCPI transaction → ~6.5 ms typical"],
-        fc="#eef3f9", ec=COLORS["blue"], fs=10.0)
+        fc="#f2f2f2", ec=COLORS["blue"], fs=10.0)
 
     box(rx, 50, rw, 16,
         ["Gen-2: Multi-Write Sequence",
          "OUTP1 OFF → SOUR1:VOLT (X) → OUTP1 ON → *WAI",
          "OUTP2 OFF → SOUR2:VOLT (Y) → OUTP2 ON → *WAI",
          "4+ SCPI transactions → ~40 ms typical"],
-        fc="#fdf3e9", ec=COLORS["tan"], fs=10.0)
+        fc="#f4f4f4", ec=COLORS["tan"], fs=10.0)
 
     # ---- Bottom block: Test Configuration ----
     bx, bw, by, bhh = 4, 92, 4, 33
@@ -148,13 +148,13 @@ def fig01():
     s3 = _stat(g3["fg_write_ms"])
     s2 = _stat(g2["fg_write_ms"])
 
-    for series, col, lab in [
+    for i, (series, col, lab) in enumerate([
         (g3["fg_write_ms"], C_G3, f"Gen-3 (n={s3['n']}, mean={s3['mean']:.2f}ms)"),
         (g2["fg_write_ms"], C_G2, f"Gen-2 (n={s2['n']}, mean={s2['mean']:.2f}ms)"),
-    ]:
+    ]):
         x = np.sort(series.dropna().values)
         y = np.arange(1, len(x) + 1) / len(x)
-        ax.plot(x, y, color=col, linewidth=2.2, label=lab)
+        ax.plot(x, y, color=col, linewidth=2.2, linestyle=line_style(i), label=lab)
 
     ax.set_xlabel("FG Write Latency (ms)")
     ax.set_ylabel("CDF")
@@ -250,25 +250,32 @@ def fig03():
     rounds = sorted(df["round"].dropna().unique().astype(int))
     g3_means = [g3[g3["round"] == r]["fg_write_ms"].mean() for r in rounds]
     g2_means = [g2[g2["round"] == r]["fg_write_ms"].mean() for r in rounds]
+    g3_stds = [g3[g3["round"] == r]["fg_write_ms"].std(ddof=1) for r in rounds]
+    g2_stds = [g2[g2["round"] == r]["fg_write_ms"].std(ddof=1) for r in rounds]
 
     x = np.arange(len(rounds))
     bw = 0.36
-    b3 = ax.bar(x - bw / 2, g3_means, bw, color=C_G3, label="Gen-3")
-    b2 = ax.bar(x + bw / 2, g2_means, bw, color=C_G2, label="Gen-2")
+    ekw = dict(ecolor="#1a1a1a", elinewidth=1.1, capthick=1.1)
+    b3 = ax.bar(x - bw / 2, g3_means, bw, yerr=g3_stds, capsize=4,
+                error_kw=ekw, color=C_G3, edgecolor=BAR_EDGE,
+                linewidth=BAR_EDGE_LW, label="Gen-3")
+    b2 = ax.bar(x + bw / 2, g2_means, bw, yerr=g2_stds, capsize=4,
+                error_kw=ekw, color=C_G2, edgecolor=BAR_EDGE,
+                linewidth=BAR_EDGE_LW, label="Gen-2")
 
     ax.set_xticks(x)
     ax.set_xticklabels([f"Round {r}" for r in rounds])
     ax.set_ylabel("FG Write Mean Latency (ms)")
     ax.set_title("FG Write Latency Per Round — Gen-3 vs Gen-2", pad=26)
 
-    ymax = max(g2_means)
+    ymax = max(m + s for m, s in zip(g2_means, g2_stds))
     ax.set_ylim(0, ymax * 1.30)  # ~30% headroom for speedup labels + title pad
 
-    # value labels on bars
-    for rects, col in [(b3, C_G3), (b2, C_G2)]:
-        for r in rects:
+    # value labels on bars (above each bar's upper error cap)
+    for rects, stds, col in [(b3, g3_stds, C_G3), (b2, g2_stds, C_G2)]:
+        for r, sd in zip(rects, stds):
             h = r.get_height()
-            ax.text(r.get_x() + r.get_width() / 2, h + ymax * 0.015,
+            ax.text(r.get_x() + r.get_width() / 2, h + sd + ymax * 0.015,
                     f"{h:.2f}", ha="center", va="bottom", fontsize=8,
                     color=col)
 
@@ -278,7 +285,7 @@ def fig03():
         ytxt = ymax * 1.18
         ax.text(x[i], ytxt, f"{sp:.1f}×", ha="center", va="center",
                 fontsize=11, fontweight="bold", color="#1a1a1a",
-                bbox=dict(boxstyle="round,pad=0.3", fc="#eef3f9",
+                bbox=dict(boxstyle="round,pad=0.3", fc="#f2f2f2",
                           ec=COLORS["blue"], lw=0.8))
 
     # legend in the empty mid-left band (above the short Gen-3 bars, below the
@@ -375,13 +382,13 @@ def fig05():
         s = series.dropna()
         ax.hist(s, bins=40, color=col, alpha=0.78, edgecolor="white", linewidth=0.4)
         med = float(s.median())
-        ax.axvline(med, color="#c0392b", linestyle="--", linewidth=1.6)
+        ax.axvline(med, color="#555555", linestyle="--", linewidth=1.6)
         ymax = ax.get_ylim()[1]
-        ax.text(med, ymax * 0.96, f"median={med:.2f}ms", color="#c0392b",
+        ax.text(med, ymax * 0.96, f"median={med:.2f}ms", color="#555555",
                 fontsize=9, ha="left" if med < s.max() * 0.6 else "right",
                 va="top", rotation=0,
                 bbox=dict(boxstyle="round,pad=0.2", fc="white",
-                          ec="#c0392b", lw=0.8))
+                          ec="#555555", lw=0.8))
         ax.set_title(title, pad=8)
         ax.set_ylabel("Count")
         st = _stat(s)

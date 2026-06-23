@@ -11,7 +11,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -181,7 +181,7 @@ def fig00():
          "Preload waveforms at init",
          "All cmds joined by \";\" → 1 write",
          "< 1 ms per switch"],
-        "#dbe8d9", COLORS["green"])
+        "#e4e4e4", COLORS["green"])
 
     # ---- Section: scenarios
     section(42.5, "Gen-3 Switching Scenarios (5 types)")
@@ -211,7 +211,7 @@ def fig00():
          "Can Gen-3 compound SCPI keep ALL switching operations within",
          "the 120 fps frame budget (8.33 ms)?",
          "Target: P99 < 5 ms for every scenario"],
-        "#fdeedd", COLORS["tan"], fs=10.3, title_fs=12)
+        "#f0f0f0", COLORS["tan"], fs=10.3, title_fs=12)
 
     save(fig, OUT / "fig00_test_architecture.png")
 
@@ -285,11 +285,11 @@ def fig02():
 # ======================================================================
 def fig03():
     fig, ax = plt.subplots(figsize=(9.5, 6))
-    for c in COLS:
+    for i, c in enumerate(COLS):
         arr = np.sort(DATA[c])
         cdf = np.arange(1, arr.size + 1) / arr.size * 100.0
         ax.step(arr, cdf, where="post", color=COLORS[CKEY[c]],
-                label=SHORT[c], linewidth=1.9)
+                linestyle=line_style(i), label=SHORT[c], linewidth=1.9)
 
     ax.set_xlabel("Switching Latency (ms)")
     ax.set_ylabel("Cumulative Percentage (%)")
@@ -440,7 +440,7 @@ def fig06():
                 cell.PAD = 0.04
             # Gen-1 row light pink
             if r == 1:
-                cell.set_facecolor("#fde2e6")
+                cell.set_facecolor("#e8e8e8")
             else:
                 cell.set_facecolor("white" if (r % 2 == 1) else
                                    COLORS["row_blue"])

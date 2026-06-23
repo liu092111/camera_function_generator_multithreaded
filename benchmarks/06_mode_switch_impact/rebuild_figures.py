@@ -21,7 +21,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
 
 import numpy as np
 import pandas as pd
@@ -114,11 +114,11 @@ def fig00():
         y = col_top - i * (box_h + box_gap) - box_h
         patch = FancyBboxPatch((lx - box_w / 2, y), box_w, box_h,
                                boxstyle="round,pad=0.02,rounding_size=0.10",
-                               linewidth=1.1, edgecolor="#27496d",
+                               linewidth=1.1, edgecolor="#444444",
                                facecolor=COLORS["blue2"], alpha=0.92)
         ax.add_patch(patch)
         ax.text(lx, y + box_h / 2, label, ha="center", va="center",
-                fontsize=10.5, fontweight="bold", color="#15314d")
+                fontsize=10.5, fontweight="bold", color="#2d2d2d")
         left_centers.append((y, y + box_h))
     for i in range(len(left_boxes) - 1):
         y_from = left_centers[i][0]
@@ -163,18 +163,18 @@ def fig00():
         y = r_extent_top - i * (r_box_h + r_gap) - r_box_h
         patch = FancyBboxPatch((rx - box_w / 2, y), box_w, r_box_h,
                                boxstyle="round,pad=0.02,rounding_size=0.10",
-                               linewidth=1.1, edgecolor="#9c5a16",
+                               linewidth=1.1, edgecolor="#636363",
                                facecolor=COLORS["tan2"], alpha=0.92)
         ax.add_patch(patch)
         ax.text(rx, y + r_box_h / 2, label, ha="center", va="center",
-                fontsize=10.5, fontweight="bold", color="#5c360a")
+                fontsize=10.5, fontweight="bold", color="#3b3b3b")
         right_centers.append((y, y + r_box_h))
     for i in range(len(right_boxes) - 1):
         y_from = right_centers[i][0]
         y_to = right_centers[i + 1][1]
         ax.add_patch(FancyArrowPatch((rx, y_from), (rx, y_to),
                                      arrowstyle="-|>", mutation_scale=14,
-                                     linewidth=1.5, color="#9c5a16"))
+                                     linewidth=1.5, color="#636363"))
 
     # ---- Bottom configuration / result block ----
     by = 0.35
@@ -308,27 +308,31 @@ def fig02():
 # fig03 — per-round bar (mean) + P99 diamonds
 # ----------------------------------------------------------------------
 def fig03():
-    means, p99s = [], []
+    means, stds, p99s = [], [], []
     for r in ROUNDS:
         v = df[df["round"] == r]["process_ms"].values
         means.append(v.mean())
+        stds.append(v.std(ddof=1))
         p99s.append(np.percentile(v, 99))
     means = np.array(means)
+    stds = np.array(stds)
     p99s = np.array(p99s)
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
     x = np.arange(len(ROUNDS))
-    ax.bar(x, means, 0.55, color=COLORS["blue"], edgecolor="#27496d",
-           linewidth=0.7, label="Mean")
+    ax.bar(x, means, 0.55, yerr=stds, capsize=5, color=COLORS["blue"],
+           edgecolor="#444444", linewidth=0.7,
+           error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2, capthick=1.2),
+           label="Mean ± Std")
     ax.scatter(x, p99s, marker="D", s=70, color=COLORS["red"], zorder=5,
-               edgecolor="#7a1f15", linewidth=0.5, label="P99")
+               edgecolor="#323232", linewidth=0.5, label="P99")
 
     ymax = p99s.max() * 1.22
     ax.set_ylim(0, ymax)
-    for xi, (m, p) in enumerate(zip(means, p99s)):
-        # bold mean label centered on the bar
-        ax.text(xi, m + ymax * 0.02, f"{m:.3f}", ha="center", va="bottom",
-                fontsize=9.5, fontweight="bold", color="#15314d")
+    for xi, (m, sd, p) in enumerate(zip(means, stds, p99s)):
+        # bold mean label sitting just above the upper error-bar cap
+        ax.text(xi, m + sd + ymax * 0.02, f"{m:.3f}", ha="center", va="bottom",
+                fontsize=9.5, fontweight="bold", color="#2d2d2d")
         # red P99 label above the diamond
         ax.text(xi, p + ymax * 0.02, f"{p:.3f}", ha="center", va="bottom",
                 fontsize=8.8, color=COLORS["red"])
@@ -438,7 +442,7 @@ def fig05():
             cell = tbl[ri, c]
             cell.set_edgecolor("#cccccc")
             if is_overall:
-                cell.set_facecolor("#dff0e4")
+                cell.set_facecolor("#ececec")
                 cell.set_text_props(color=COLORS["pass_green"],
                                     fontweight="bold")
             elif ri % 2 == 0:
@@ -535,12 +539,15 @@ def fig06():
 
     sx, sy = cdf(main_baseline)
     axb.plot(sx, sy, color=COLORS["grey"], linewidth=2.0,
+             linestyle=line_style(0),
              label="FG on Main Thread: Baseline")
     sx, sy = cdf(main_crossgroup)
     axb.plot(sx, sy, color=COLORS["purple"], linewidth=2.0,
+             linestyle=line_style(1),
              label="FG on Main Thread: Cross-Group")
     sx, sy = cdf(real)
     axb.plot(sx, sy, color=COLORS["tan"], linewidth=2.2,
+             linestyle=line_style(2),
              label="FG on Separate Thread: With Injection")
 
     axb.set_ylim(0, 1.02)

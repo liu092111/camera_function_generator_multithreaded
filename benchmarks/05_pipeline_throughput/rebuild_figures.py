@@ -13,7 +13,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
 
 import numpy as np
 import pandas as pd
@@ -62,11 +62,11 @@ def fig00():
     flow_y = 84
     box_h = 9.0
     proc_boxes = [
-        dict(x=4, w=18, fc="#dbe7f3", title="Capture Thread",
+        dict(x=4, w=18, fc="#e5e5e5", title="Capture Thread",
              lines=["cap.read()", "120 fps blocking"]),
-        dict(x=40, w=18, fc="#e3f0e6", title="Process Thread",
+        dict(x=40, w=18, fc="#ededed", title="Process Thread",
              lines=["TPS + HSV", "Kalman + EMA"]),
-        dict(x=78, w=18, fc="#f3e7d6", title="Main Thread",
+        dict(x=78, w=18, fc="#e8e8e8", title="Main Thread",
              lines=["PID + FG voltage", "(every 5 frames)"]),
     ]
     arrow_boxes = [
@@ -74,7 +74,7 @@ def fig00():
         dict(x=60, w=12, fc="#eeeeee", title="result_queue", lines=["FIFO buffer"]),
     ]
 
-    def draw_box(x, w, y, h, fc, title, lines, ec="#5a6b7b"):
+    def draw_box(x, w, y, h, fc, title, lines, ec="#696969"):
         box = FancyBboxPatch((x, y - h / 2), w, h,
                              boxstyle="round,pad=0.3,rounding_size=0.8",
                              linewidth=1.3, edgecolor=ec, facecolor=fc, zorder=2)
@@ -90,14 +90,14 @@ def fig00():
         draw_box(b["x"], b["w"], flow_y, box_h, b["fc"], b["title"], b["lines"])
     for b in arrow_boxes:
         draw_box(b["x"], b["w"], flow_y, box_h - 1.5, b["fc"], b["title"], b["lines"],
-                 ec="#9aa6b0")
+                 ec="#a4a4a4")
 
     # arrows connecting the row
     seq_x = [(22, 24), (36, 40), (58, 60), (72, 78)]
     for x0, x1 in seq_x:
         ax.add_patch(FancyArrowPatch((x0, flow_y), (x1, flow_y),
                      arrowstyle="-|>", mutation_scale=16, linewidth=1.6,
-                     color="#5a6b7b", zorder=1))
+                     color="#696969", zorder=1))
 
     # ---- Middle latency table ----
     tbl_top = 68
@@ -131,13 +131,13 @@ def fig00():
     # table border
     ax.add_patch(plt.Rectangle((20, header_y - row_h / 2 - row_h * len(lat_rows)),
                  60, row_h * (len(lat_rows) + 1), facecolor="none",
-                 edgecolor="#9aa6b0", linewidth=1.1, zorder=2))
+                 edgecolor="#a4a4a4", linewidth=1.1, zorder=2))
 
     # ---- Bottom configuration & results block ----
     blk_top = 34
     ax.add_patch(FancyBboxPatch((8, 6), 84, blk_top - 6,
                  boxstyle="round,pad=0.5,rounding_size=1.2",
-                 linewidth=1.3, edgecolor="#5a6b7b", facecolor="#f7f9fb", zorder=1))
+                 linewidth=1.3, edgecolor="#696969", facecolor="#f7f9fb", zorder=1))
     ax.text(50, blk_top - 3.0, "Test Configuration & Results", ha="center",
             va="center", fontsize=12, fontweight="bold", zorder=3)
     cfg_lines = [
@@ -170,10 +170,12 @@ def fig01():
     fig, ax = plt.subplots(figsize=(7.2, 5.6))
     x = np.arange(len(groups))
     w = 0.55
-    b1 = ax.bar(x, qw, w, label="Queue Wait", color=COLORS["grey"])
-    b2 = ax.bar(x, pr, w, bottom=qw, label="Process", color=COLORS["green"])
+    b1 = ax.bar(x, qw, w, label="Queue Wait", color=COLORS["grey"],
+                edgecolor="white", linewidth=1.0)
+    b2 = ax.bar(x, pr, w, bottom=qw, label="Process", color=COLORS["green"],
+                edgecolor="white", linewidth=1.0)
     b3 = ax.bar(x, fg, w, bottom=np.array(qw) + np.array(pr), label="FG Write",
-                color=COLORS["tan"])
+                color=COLORS["tan"], edgecolor="white", linewidth=1.0)
 
     totals = np.array(qw) + np.array(pr) + np.array(fg)
     for xi, t in zip(x, totals):
@@ -196,16 +198,20 @@ def fig01():
 # ----------------------------------------------------------------------
 def fig02():
     means = [df[df["round"] == r]["process_ms"].mean() for r in ROUNDS]
+    stds = [df[df["round"] == r]["process_ms"].std(ddof=1) for r in ROUNDS]
     p99 = [df[df["round"] == r]["process_ms"].quantile(0.99) for r in ROUNDS]
 
     fig, ax = plt.subplots(figsize=(7.4, 5.6))
     x = np.arange(len(ROUNDS))
-    ax.bar(x, means, 0.55, color=COLORS["blue"], label="Mean")
+    ax.bar(x, means, 0.55, yerr=stds, capsize=5, color=COLORS["blue"],
+           edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW,
+           error_kw=dict(ecolor="#1a1a1a", elinewidth=1.2, capthick=1.2),
+           label="Mean ± Std")
     ax.scatter(x, p99, marker="D", s=70, color=COLORS["red"], zorder=5,
                label="P99")
 
-    for xi, m in zip(x, means):
-        ax.text(xi, m + 0.05, f"{m:.2f}", ha="center", va="bottom",
+    for xi, m, sd in zip(x, means, stds):
+        ax.text(xi, m + sd + 0.05, f"{m:.2f}", ha="center", va="bottom",
                 fontsize=10, fontweight="bold")
     for xi, p in zip(x, p99):
         ax.text(xi, p + 0.10, f"{p:.2f}", ha="center", va="bottom",
@@ -232,6 +238,7 @@ def fig03():
         s = np.sort(df[df["round"] == r]["total_ms"].values)
         cdf = np.arange(1, len(s) + 1) / len(s)
         ax.plot(s, cdf, color=ramp[i % len(ramp)], linewidth=1.9,
+                linestyle=line_style(i),
                 label=f"Round {r} (mean={s.mean():.2f}ms)")
     ax.set_xlabel("Total Frame Latency (ms)")
     ax.set_ylabel("CDF")
@@ -294,19 +301,25 @@ def fig05():
     labels = ["Queue Wait", "Process", "FG Write", "Total"]
     av = [active[c].mean() for c in cols]
     iv = [idle[c].mean() for c in cols]
+    asd = [active[c].std(ddof=1) for c in cols]
+    isd = [idle[c].std(ddof=1) for c in cols]
 
     fig, ax = plt.subplots(figsize=(8.2, 5.6))
     x = np.arange(len(cols))
     w = 0.38
-    ba = ax.bar(x - w / 2, av, w, color=COLORS["tan"],
-                label=f"FG-Active (n={n_active})")
-    bi = ax.bar(x + w / 2, iv, w, color=COLORS["blue"],
-                label=f"FG-Idle (n={n_idle})")
+    ekw = dict(ecolor="#1a1a1a", elinewidth=1.1, capthick=1.1)
+    ba = ax.bar(x - w / 2, av, w, yerr=asd, capsize=4, error_kw=ekw,
+                color=COLORS["tan"], edgecolor=BAR_EDGE,
+                linewidth=BAR_EDGE_LW, label=f"FG-Active (n={n_active})")
+    bi = ax.bar(x + w / 2, iv, w, yerr=isd, capsize=4, error_kw=ekw,
+                color=COLORS["blue"], edgecolor=BAR_EDGE,
+                linewidth=BAR_EDGE_LW, label=f"FG-Idle (n={n_idle})")
 
-    ymax = max(max(av), max(iv))
-    for bars, vals in ((ba, av), (bi, iv)):
-        for b, v in zip(bars, vals):
-            ax.text(b.get_x() + b.get_width() / 2, v + ymax * 0.012,
+    ymax = max(max(a + s for a, s in zip(av, asd)),
+               max(a + s for a, s in zip(iv, isd)))
+    for bars, vals, sds in ((ba, av, asd), (bi, iv, isd)):
+        for b, v, sd in zip(bars, vals, sds):
+            ax.text(b.get_x() + b.get_width() / 2, v + sd + ymax * 0.012,
                     f"{v:.2f}", ha="center", va="bottom", fontsize=8.8)
 
     ax.set_xticks(x)
@@ -401,13 +414,13 @@ def fig06():
         y0 = top - (ri + 1) * rh
         if st == "section":
             ax.add_patch(plt.Rectangle((0, y0), 1, rh, transform=ax.transAxes,
-                         facecolor="#d3deea", edgecolor="none"))
+                         facecolor="#dddddd", edgecolor="none"))
             cell(ri, 0, row[0], fontsize=10, fontweight="bold",
-                 color="#1f3a5a")
+                 color="#373737")
             for c in range(1, ncol):
                 if row[c]:
                     cell(ri, c, row[c], fontsize=9.5, fontweight="bold",
-                         color="#1f3a5a")
+                         color="#373737")
         else:
             if ri % 2 == 0:
                 ax.add_patch(plt.Rectangle((0, y0), 1, rh, transform=ax.transAxes,
@@ -425,11 +438,11 @@ def fig06():
     # grid lines
     for ri in range(nrow + 1):
         y = top - ri * rh
-        ax.plot([0, 1], [y, y], transform=ax.transAxes, color="#c2ccd6",
+        ax.plot([0, 1], [y, y], transform=ax.transAxes, color="#cbcbcb",
                 linewidth=0.7)
-    ax.plot([0, 0], [bottom, top], transform=ax.transAxes, color="#c2ccd6",
+    ax.plot([0, 0], [bottom, top], transform=ax.transAxes, color="#cbcbcb",
             linewidth=0.7)
-    ax.plot([1, 1], [bottom, top], transform=ax.transAxes, color="#c2ccd6",
+    ax.plot([1, 1], [bottom, top], transform=ax.transAxes, color="#cbcbcb",
             linewidth=0.7)
 
     save(fig, str(HERE / "fig06_summary_table.png"))
@@ -492,7 +505,7 @@ def fig07():
     p99 = [df[df["round"] == rr]["process_ms"].quantile(0.99) for rr in ROUNDS]
     x = np.arange(len(ROUNDS))
     ax.bar(x, means, 0.55, yerr=stds, capsize=4, color=COLORS["blue"],
-           label="Mean ± Std",
+           edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW, label="Mean ± Std",
            error_kw=dict(ecolor="#333333", elinewidth=1.1))
     ax.scatter(x, p99, marker="D", s=60, color=COLORS["red"], zorder=5,
                label="P99")
