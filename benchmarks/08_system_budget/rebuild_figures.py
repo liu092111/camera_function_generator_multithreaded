@@ -13,7 +13,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -219,7 +219,7 @@ def fig02():
     for r in range(1, 6):
         s = np.sort(df[df["round"] == r].process_ms.values)
         cdf = np.arange(1, len(s) + 1) / len(s)
-        ax.plot(s, cdf, color=ramp[r - 1], lw=2.0,
+        ax.plot(s, cdf, color=ramp[r - 1], lw=LW_MULTI,
                 linestyle=line_style(r - 1),
                 label=f"Round {r} (mean={s.mean():.2f} ms)")
     ax.set_xlabel("Process Thread Latency (ms)")

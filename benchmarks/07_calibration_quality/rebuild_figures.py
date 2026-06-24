@@ -12,7 +12,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI  # noqa: E402
 
 apply_style()
 
@@ -186,7 +186,7 @@ def fig01():
 
     sorted_r = np.sort(res)
     pct = np.linspace(0, 100, n)
-    ax.plot(pct, sorted_r, color=COLORS["blue"], linewidth=2.0,
+    ax.plot(pct, sorted_r, color=LINE_BLACK, linewidth=LW_MAIN,
             label="Sorted residual")
 
     ax.set_title("TPS Calibration Residual — Sorted (1504 Points)")
@@ -316,9 +316,9 @@ def fig04():
     s_t, c_t = cdf(res)
     s_a, c_a = cdf(aff)
 
-    ax.plot(s_t, c_t, color=COLORS["blue"], lw=2.2, linestyle=line_style(0),
+    ax.plot(s_t, c_t, color=COLORS["blue"], lw=LW_MULTI, linestyle=line_style(0),
             label="TPS (mean=%.3f px)" % tps_mean)
-    ax.plot(s_a, c_a, color=COLORS["tan"], lw=2.2, linestyle=line_style(1),
+    ax.plot(s_a, c_a, color=COLORS["tan"], lw=LW_MULTI, linestyle=line_style(1),
             label="Affine (mean=%.3f px)" % aff_mean)
 
     ax.set_title("Calibration Accuracy: TPS vs Affine Transform")
@@ -364,7 +364,7 @@ def fig05():
     ax2.spines["top"].set_visible(False)
     sorted_r = np.sort(res)
     cum = 100.0 * np.arange(1, n + 1) / n
-    line_cum, = ax2.plot(sorted_r, cum, color=COLORS["red"], lw=2.0,
+    line_cum, = ax2.plot(sorted_r, cum, color=LINE_BLACK, lw=LW_MAIN,
                          label="Cumulative %", zorder=3)
     ax2.set_ylabel("Cumulative (%)")
     ax2.set_ylim(0, 105)

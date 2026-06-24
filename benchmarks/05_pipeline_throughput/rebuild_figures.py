@@ -13,7 +13,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
 
 import numpy as np
 import pandas as pd
@@ -237,7 +237,7 @@ def fig03():
     for i, r in enumerate(ROUNDS):
         s = np.sort(df[df["round"] == r]["total_ms"].values)
         cdf = np.arange(1, len(s) + 1) / len(s)
-        ax.plot(s, cdf, color=ramp[i % len(ramp)], linewidth=1.9,
+        ax.plot(s, cdf, color=ramp[i % len(ramp)], linewidth=LW_MULTI,
                 linestyle=line_style(i),
                 label=f"Round {r} (mean={s.mean():.2f}ms)")
     ax.set_xlabel("Total Frame Latency (ms)")
@@ -469,7 +469,7 @@ def fig07():
                edgecolors="none")
     ax.fill_between(idx, omean - ostd, omean + ostd, color=COLORS["green"],
                     alpha=0.15, label="±1σ band")
-    ax.plot(idx, roll, color=COLORS["green"], linewidth=1.8,
+    ax.plot(idx, roll, color=LINE_BLACK, linewidth=LW_MAIN,
             label="Rolling mean (50)")
     ax.axhline(omean, color=COLORS["red"], linewidth=1.4, linestyle="--",
                label=f"Overall mean = {omean:.2f} ms")

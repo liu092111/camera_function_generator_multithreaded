@@ -15,7 +15,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 from matplotlib.lines import Line2D
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
 
 apply_style()
 
@@ -154,7 +154,7 @@ def fig01():
     ]):
         x = np.sort(series.dropna().values)
         y = np.arange(1, len(x) + 1) / len(x)
-        ax.plot(x, y, color=col, linewidth=2.2, linestyle=line_style(i), label=lab)
+        ax.plot(x, y, color=col, linewidth=LW_MULTI, linestyle=line_style(i), label=lab)
 
     ax.set_xlabel("FG Write Latency (ms)")
     ax.set_ylabel("CDF")

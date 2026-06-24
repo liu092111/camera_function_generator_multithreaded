@@ -8,7 +8,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
 
 import numpy as np
 import pandas as pd
@@ -227,7 +227,7 @@ def fig02():
         n = len(vals)
         y = np.arange(1, n + 1) / n * 100.0
         mean = vals.mean()
-        ax.plot(vals, y, color=ramp[ri], linewidth=1.8,
+        ax.plot(vals, y, color=ramp[ri], linewidth=LW_MULTI,
                 linestyle=line_style(ri),
                 label=f"Round {r} (µ={mean:.3f}, n={n})")
     ax.set_xlabel("Total Processing Time (ms)")

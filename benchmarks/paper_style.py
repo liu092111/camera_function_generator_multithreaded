@@ -44,10 +44,12 @@ COLORS = {
     "red":    "#000000",   # P99 / threshold emphasis markers   -> black
     "grey":   "#aeaeae",   # baseline / annotations
     "grey_l": "#e0e0e0",
-    # 5-step sequential grey ramp for "per round" series (R1..R5). Kept in a
-    # medium band so thin CDF/line strokes stay visible on white; bars that
-    # use this ramp also carry a dark edge.
-    "ramp5":  ["#5a5a5a", "#7d7d7d", "#9a9a9a", "#bcbcbc", "#d6d6d6"],
+    # 5-step sequential grey ramp for "per round" series (R1..R5). The light
+    # end stays dark enough (~#a8) that thin CDF/line strokes remain visible
+    # on a white slide; bars that use this ramp also carry a dark edge. Line
+    # plots additionally use dash-style differentiation, so the steps need
+    # only be distinguishable, not maximally spread.
+    "ramp5":  ["#3d3d3d", "#5e5e5e", "#7d7d7d", "#969696", "#aeaeae"],
     "header_blue": "#404040",   # table header fill (dark grey)
     "row_blue":    "#ededed",   # table zebra row fill (light grey)
     "pass_green":  "#7d7d7d",
@@ -57,6 +59,13 @@ COLORS = {
 # fills always have a crisp border that frames the black error bars.
 BAR_EDGE = "#1a1a1a"
 BAR_EDGE_LW = 0.9
+
+# Single-series line/CDF plots use a solid BLACK stroke for maximum slide
+# legibility; multi-series plots keep grey + dash-style differentiation.
+LINE_BLACK = "#000000"
+# Recommended stroke widths for projected slides.
+LW_MAIN = 3.0   # primary single-series line
+LW_MULTI = 2.6  # each line in a multi-series CDF/overlay
 
 # ----------------------------------------------------------------------
 # Line-style cycle for figures whose series are distinguished ONLY by
@@ -134,7 +143,10 @@ def apply_style():
         "savefig.bbox": "tight",
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
-        "lines.linewidth": 1.8,
+        # Thicker default strokes so line/CDF figures stay legible when
+        # projected on a slide.
+        "lines.linewidth": 2.8,
+        "lines.markersize": 7,
         "patch.linewidth": 0.6,
     })
 

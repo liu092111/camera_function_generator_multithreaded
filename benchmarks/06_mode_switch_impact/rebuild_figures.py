@@ -21,7 +21,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
 
 import numpy as np
 import pandas as pd
@@ -538,15 +538,15 @@ def fig06():
     main_crossgroup = real + (MAIN_CROSSGROUP - real_mean)  # reference (shifted)
 
     sx, sy = cdf(main_baseline)
-    axb.plot(sx, sy, color=COLORS["grey"], linewidth=2.0,
+    axb.plot(sx, sy, color=COLORS["grey"], linewidth=LW_MULTI,
              linestyle=line_style(0),
              label="FG on Main Thread: Baseline")
     sx, sy = cdf(main_crossgroup)
-    axb.plot(sx, sy, color=COLORS["purple"], linewidth=2.0,
+    axb.plot(sx, sy, color=COLORS["purple"], linewidth=LW_MULTI,
              linestyle=line_style(1),
              label="FG on Main Thread: Cross-Group")
     sx, sy = cdf(real)
-    axb.plot(sx, sy, color=COLORS["tan"], linewidth=2.2,
+    axb.plot(sx, sy, color=COLORS["tan"], linewidth=LW_MULTI,
              linestyle=line_style(2),
              label="FG on Separate Thread: With Injection")
 

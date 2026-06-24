@@ -11,7 +11,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -289,7 +289,7 @@ def fig03():
         arr = np.sort(DATA[c])
         cdf = np.arange(1, arr.size + 1) / arr.size * 100.0
         ax.step(arr, cdf, where="post", color=COLORS[CKEY[c]],
-                linestyle=line_style(i), label=SHORT[c], linewidth=1.9)
+                linestyle=line_style(i), label=SHORT[c], linewidth=LW_MULTI)
 
     ax.set_xlabel("Switching Latency (ms)")
     ax.set_ylabel("Cumulative Percentage (%)")
@@ -368,7 +368,7 @@ def fig05():
         # KDE
         kde = gaussian_kde(arr)
         xs = np.linspace(arr.min(), arr.max(), 200)
-        ax.plot(xs, kde(xs), color=col, linewidth=2.0, zorder=3)
+        ax.plot(xs, kde(xs), color=LINE_BLACK, linewidth=LW_MAIN, zorder=3)
         mu = np.mean(arr)
         sig = np.std(arr, ddof=1)
         ax.axvline(mu, color="#222222", linestyle="--", linewidth=1.3,

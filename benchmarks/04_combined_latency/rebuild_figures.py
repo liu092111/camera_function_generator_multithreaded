@@ -10,7 +10,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
 
 import numpy as np
 import pandas as pd
@@ -274,7 +274,7 @@ def fig03():
     for i, s in enumerate(SCEN_ORDER):
         v = np.sort(ST[s]["proc"])
         cdf = np.arange(1, len(v) + 1) / len(v)
-        ax.plot(v, cdf, color=COLOR[s], linewidth=2.0, linestyle=line_style(i),
+        ax.plot(v, cdf, color=COLOR[s], linewidth=LW_MULTI, linestyle=line_style(i),
                 label=f"{LABEL[s]} (mean={ST[s]['proc_mean']:.2f} ms)")
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_ylabel("CDF")
@@ -286,31 +286,47 @@ def fig03():
 
 
 # ======================================================================
-# fig04 — grouped bar by round
+# fig04 — one bar per scenario (mean +/- std over all rounds)
+#
+# Previously this was a 4-scenario x 5-round grouped bar (20 near-identical
+# grey bars) that was unreadable on a slide. It is now collapsed to ONE bar
+# per scenario, aggregated over every round, with a black mean +/- std error
+# bar so the spread is shown directly. Cross-round consistency is reported in
+# a small annotation instead of as separate per-round bars.
 # ======================================================================
 def fig04():
-    fig, ax = plt.subplots(figsize=(11, 6))
-    rounds = [1, 2, 3, 4, 5]
-    x = np.arange(len(rounds))
-    nb = len(SCEN_ORDER)
-    w = 0.19
-    for j, s in enumerate(SCEN_ORDER):
-        vals = []
-        for r in rounds:
-            sub = df[(df.scenario == s) & (df["round"] == r)]
-            vals.append(sub.process_ms.mean())
-        offset = (j - (nb - 1) / 2) * w
-        ax.bar(x + offset, vals, width=w, color=COLOR[s], edgecolor="#333333",
-               linewidth=0.6, label=LABEL[s], zorder=3)
+    fig, ax = plt.subplots(figsize=(9.5, 6))
+    x = np.arange(len(SCEN_ORDER))
+    means = [ST[s]["proc_mean"] for s in SCEN_ORDER]
+    stds = [ST[s]["proc_std"] for s in SCEN_ORDER]
+    # Distinct light-grey steps so the four scenarios separate cleanly.
+    fills = grey_ramp(len(SCEN_ORDER), lo=0.62, hi=0.86)
+
+    ax.bar(x, means, width=0.6, yerr=stds, capsize=6, color=fills,
+           edgecolor=BAR_EDGE, linewidth=BAR_EDGE_LW,
+           error_kw=dict(ecolor="#1a1a1a", elinewidth=1.6, capthick=1.6),
+           zorder=3, label="Mean ± Std")
+
+    ymax = max(m + s for m, s in zip(means, stds)) * 1.22
+    ax.set_ylim(0, ymax)
+    for xi, m, sd in zip(x, means, stds):
+        ax.text(xi, m + sd + ymax * 0.02, f"{m:.2f}", ha="center", va="bottom",
+                fontsize=11.5, fontweight="bold", color="#1a1a1a")
+
+    # Cross-round consistency: max spread of per-round means across scenarios.
+    per_round = df.groupby(["scenario", "round"]).process_ms.mean()
+    spread = max(per_round.groupby(level=0).max() -
+                 per_round.groupby(level=0).min())
+    ax.text(0.02, 0.97,
+            f"Cross-round spread ≤ {spread:.2f} ms\n(aggregated over 5 rounds)",
+            transform=ax.transAxes, ha="left", va="top", fontsize=10.5,
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
+                      edgecolor="#999999"))
 
     ax.set_xticks(x)
-    ax.set_xticklabels([f"Round {r}" for r in rounds])
-    ax.set_ylabel("Process Thread Mean Latency (ms)")
-    ax.set_title("Process Thread Latency — 4 Scenarios × 5 Rounds")
-    ymax = max(df.groupby(["scenario", "round"]).process_ms.mean()) * 1.30
-    ax.set_ylim(0, ymax)
-    ax.legend(loc="upper center", ncol=4, frameon=True,
-              bbox_to_anchor=(0.5, 1.0), columnspacing=1.2)
+    ax.set_xticklabels([LABEL[s] for s in SCEN_ORDER])
+    ax.set_ylabel("Process Thread Latency (ms)")
+    ax.set_title("Process Thread Latency by Scenario (Mean ± Std)")
     finish(ax)
     save(fig, os.path.join(HERE, "fig04_grouped_bar_rounds.png"))
 
