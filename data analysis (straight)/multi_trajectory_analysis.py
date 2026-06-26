@@ -576,6 +576,81 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
     print(f"✓ 角度比較圖已儲存: {output_path}")
 
 
+def plot_multi_position_error(data_dict, output_path, title="Position Error"):
+    """
+    繪製多軌跡的「位置誤差」比較圖（單張）。
+
+    定義（依使用者設定）：
+    - 理想直線 = 垂直軸（y 方向）。致動器理想上應沿垂直方向直走。
+    - 位置誤差 = 每一點相對起點的橫向（x 方向）位移，正值代表偏右、負值偏左。
+    - 橫軸 = 沿垂直方向已前進的距離 |Δy|（mm），而非時間。
+
+    與 orientation 圖的差異：這裡量的是「偏掉的實際距離 (mm)」，
+    不是行進方向的角度偏差。
+
+    Args:
+        data_dict: {檔案名稱: DataFrame} 字典
+        output_path: 輸出圖片路徑
+        title: 圖表標題
+    """
+    if not data_dict:
+        print("沒有資料可繪製")
+        return
+
+    fig, ax = plt.subplots(1, 1, figsize=(11, 8))
+    colors = plt.cm.tab10.colors
+
+    for i, (name, df) in enumerate(data_dict.items()):
+        if "x_mm" not in df.columns or "y_mm" not in df.columns:
+            continue
+
+        x = df["x_mm"].to_numpy()
+        y = df["y_mm"].to_numpy()
+
+        valid = np.isfinite(x) & np.isfinite(y)
+        x_valid = x[valid]
+        y_valid = y[valid]
+
+        if len(x_valid) < 2:
+            continue
+
+        # 套用與位置/偏移圖相同的平滑，避免逐點雜訊放大誤差
+        x_smooth = smooth_data(x_valid, SMOOTHING_METHOD)
+        y_smooth = smooth_data(y_valid, SMOOTHING_METHOD)
+
+        # 橫向誤差（相對起點的 x 位移）與沿垂直方向前進距離
+        lateral_error = x_smooth - x_smooth[0]
+        vertical_distance = np.abs(y_smooth - y_smooth[0])
+
+        color = colors[i % len(colors)]
+
+        # 統計：最大絕對偏移與 RMS 偏移
+        max_abs = np.max(np.abs(lateral_error))
+        rms = np.sqrt(np.mean(lateral_error**2))
+        label = f"{name} (Max={max_abs:.2f}, RMS={rms:.2f} mm)"
+
+        ax.plot(vertical_distance, lateral_error, lw=3, color=color,
+                label=label, alpha=0.8)
+
+    # 理想直線（零誤差）參考線
+    ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
+
+    ax.set_xlabel("Vertical Distance Traveled (mm)", fontsize=24, labelpad=15)
+    ax.set_ylabel("Lateral Position Error (mm)", fontsize=24, labelpad=15)
+    ax.set_title(title, fontsize=22, pad=20)
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
+
+    ax.annotate("0 = On ideal straight line, + = Right, − = Left",
+                xy=(0.02, 0.02), xycoords='axes fraction',
+                fontsize=12, color='gray')
+
+    plt.tight_layout(pad=2.0)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
+    plt.close(fig)
+    print(f"✓ 位置誤差比較圖已儲存: {output_path}")
+
+
 def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory Deviation from Vertical"):
     """
     繪製多軌跡相對於垂直線的偏移比較圖（三個子圖）
@@ -856,7 +931,11 @@ def main():
     # 繪製角度比較圖
     angle_output = os.path.join(output_folder, "orientation_comparison.png")
     plot_multi_angle_comparison(data_dict, angle_output, title="Orientation Comparison")
-    
+
+    # 繪製位置誤差比較圖（橫向偏離理想垂直直線的距離 vs 前進距離）
+    error_output = os.path.join(output_folder, "position_error_comparison.png")
+    plot_multi_position_error(data_dict, error_output, title="Position Error")
+
     print("\n" + "=" * 60)
     print("分析完成！")
     print("=" * 60)
