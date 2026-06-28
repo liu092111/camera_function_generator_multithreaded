@@ -1,2 +1,2 @@
 ﻿name,target_angle_deg,rise_time_s,overshoot_deg,overshoot_pct,settling_time_s,steady_state_err_deg
-counterclockwise_20degree,-20,0.2392,1.714,8.57,0.5916 (±8%),5.24
+clockwise openloop experiment,-20,N/A,0.0,0.0,N/A,163.047
