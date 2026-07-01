@@ -15,7 +15,7 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 from matplotlib.lines import Line2D
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines
 
 apply_style()
 
@@ -148,13 +148,16 @@ def fig01():
     s3 = _stat(g3["fg_write_ms"])
     s2 = _stat(g2["fg_write_ms"])
 
+    cdf_series = []
     for i, (series, col, lab) in enumerate([
         (g3["fg_write_ms"], C_G3, f"Gen-3 (n={s3['n']}, mean={s3['mean']:.2f}ms)"),
         (g2["fg_write_ms"], C_G2, f"Gen-2 (n={s2['n']}, mean={s2['mean']:.2f}ms)"),
     ]):
         x = np.sort(series.dropna().values)
         y = np.arange(1, len(x) + 1) / len(x)
-        ax.plot(x, y, color=col, linewidth=LW_MULTI, linestyle=line_style(i), label=lab)
+        cdf_series.append({"x": x, "y": y, "color": col,
+                           "style": line_style(i), "label": lab})
+    cdf_lines(ax, cdf_series)
 
     ax.set_xlabel("FG Write Latency (ms)")
     ax.set_ylabel("CDF")
@@ -165,7 +168,7 @@ def fig01():
 
     # light annotation noting Gen-3 near-zero cluster, in empty space (upper-left)
     g3_frac = float((g3["fg_write_ms"] < 1.0).mean())
-    ax.annotate(f"Gen-3 cluster: {g3_frac*100:.0f}% of frames < 1 ms",
+    ax.annotate(f"Gen-3 cluster: {g3_frac*100:.1f}% of frames < 1 ms",
                 xy=(0.5, 0.5), xytext=(0.30, 0.86), textcoords="axes fraction",
                 fontsize=9.5, color=C_G3,
                 arrowprops=dict(arrowstyle="->", color=C_G3, lw=1.2,

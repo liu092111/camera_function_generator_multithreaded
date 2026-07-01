@@ -8,7 +8,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines
 
 import numpy as np
 import pandas as pd
@@ -222,14 +222,16 @@ def fig02():
     rounds = [1, 2, 3, 4, 5]
     ramp = COLORS["ramp5"]
     fig, ax = plt.subplots(figsize=(9, 5.5))
+    series = []
     for ri, r in enumerate(rounds):
         vals = np.sort(multi[multi["round"] == r]["total_ms"].values)
         n = len(vals)
         y = np.arange(1, n + 1) / n * 100.0
         mean = vals.mean()
-        ax.plot(vals, y, color=ramp[ri], linewidth=LW_MULTI,
-                linestyle=line_style(ri),
-                label=f"Round {r} (µ={mean:.3f}, n={n})")
+        series.append({"x": vals, "y": y, "color": ramp[ri],
+                       "style": line_style(ri),
+                       "label": f"Round {r} (µ={mean:.3f}, n={n})"})
+    cdf_lines(ax, series)
     ax.set_xlabel("Total Processing Time (ms)")
     ax.set_ylabel("Cumulative Percentage (%)")
     ax.set_title("Empirical CDF - Total Latency per Round")
@@ -261,13 +263,19 @@ def fig03():
                   edgecolor="#444444", linewidth=0.6, capsize=4,
                   error_kw=dict(elinewidth=1.0, ecolor="#333333"),
                   label="Mean +/- Std")
-    ax.scatter(x, p99s, marker="D", s=60, color=COLORS["red"], zorder=5,
-               label="P99", edgecolor="#323232", linewidth=0.5)
+    ax.scatter(x, p99s, marker="D", s=90, color=COLORS["red"], zorder=5,
+               label="P99", edgecolor="#323232", linewidth=0.6)
 
-    # value labels above P99 markers
-    for xi, (m, p) in enumerate(zip(means, p99s)):
-        ax.text(xi, p + 0.015 * max(p99s), f"{m:.3f}", ha="center", va="bottom",
-                fontsize=8.5, color="#222222")
+    # Value labels: each number sits at the element it describes so the
+    # printed value always matches its Y position. The MEAN is labelled on
+    # the bar (just above the upper error-bar cap); the P99 is labelled in
+    # red on its diamond. (Previously the mean was mistakenly printed above
+    # the P99 marker, so the number contradicted the axis — thesis review.)
+    for xi, (m, sd, p) in enumerate(zip(means, stds, p99s)):
+        ax.text(xi, m + sd + 0.015 * max(p99s), f"{m:.3f}", ha="center",
+                va="bottom", fontsize=11, fontweight="bold", color="#1a1a1a")
+        ax.text(xi + 0.16, p, f"P99 {p:.3f}", ha="left", va="center",
+                fontsize=10.5, color=COLORS["red"], fontweight="bold")
 
     ax.set_xticks(x)
     ax.set_xticklabels([f"Round {r}\n(n={n})" for r, n in zip(rounds, ns)])

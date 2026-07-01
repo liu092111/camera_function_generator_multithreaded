@@ -10,7 +10,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines
 
 import numpy as np
 import pandas as pd
@@ -226,8 +226,8 @@ def fig01():
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_title("Process Thread Latency Ridge Plot — 4 FG Scenarios\n"
                  "(Thread Isolation Validation)")
+    finish(ax, frame=False)
     ax.spines["left"].set_visible(False)
-    finish(ax)
     save(fig, os.path.join(HERE, "fig01_ridge_plot.png"))
 
 
@@ -271,11 +271,14 @@ def fig02():
 # ======================================================================
 def fig03():
     fig, ax = plt.subplots(figsize=(9, 6))
+    series = []
     for i, s in enumerate(SCEN_ORDER):
         v = np.sort(ST[s]["proc"])
         cdf = np.arange(1, len(v) + 1) / len(v)
-        ax.plot(v, cdf, color=COLOR[s], linewidth=LW_MULTI, linestyle=line_style(i),
-                label=f"{LABEL[s]} (mean={ST[s]['proc_mean']:.2f} ms)")
+        series.append({"x": v, "y": cdf, "color": COLOR[s],
+                       "style": line_style(i),
+                       "label": f"{LABEL[s]} (mean={ST[s]['proc_mean']:.2f} ms)"})
+    cdf_lines(ax, series)
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_ylabel("CDF")
     ax.set_ylim(0, 1.02)

@@ -12,7 +12,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines  # noqa: E402
 
 apply_style()
 
@@ -235,8 +235,10 @@ def fig02():
     ZN = griddata((gx, gy), res, (XI, YI), method="nearest")
     ZI = np.where(np.isnan(ZI), ZN, ZI)
 
-    # Greyscale heatmap: light = low residual, dark = high residual.
-    im = ax.imshow(ZI, origin="upper", cmap="Greys",
+    # Perceptually-uniform colour heatmap (low residual = dark purple,
+    # high = yellow) so the centre-to-edge gradient is clearly readable;
+    # the previous single-hue greyscale washed out in print.
+    im = ax.imshow(ZI, origin="upper", cmap="viridis",
                    extent=[gx.min(), gx.max(), gy.max(), gy.min()],
                    aspect="auto", vmin=0, vmax=tps_p99)
 
@@ -244,10 +246,21 @@ def fig02():
     ax.set_xlabel("Grid X (px)")
     ax.set_ylabel("Grid Y (px)")
 
+    # State the physical scale of the calibration grid so the reader can
+    # convert pixel coordinates to real distance (5 mm reference grid;
+    # validation points sampled on a 10 px lattice — see §4 methodology).
+    ax.text(0.015, 0.985,
+            "Calibration grid: 5 mm spacing\n"
+            "Validation lattice: 10 px per cell",
+            transform=ax.transAxes, ha="left", va="top", fontsize=11,
+            color="#ffffff",
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="#00000099",
+                      edgecolor="white", linewidth=0.8))
+
     cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
     cb.set_label("Residual (px)")
-    cb.outline.set_edgecolor("#333333")
-    cb.outline.set_linewidth(0.8)
+    cb.outline.set_edgecolor("#000000")
+    cb.outline.set_linewidth(1.0)
 
     save(fig, str(HERE / "fig02_spatial_heatmap.png"))
 
@@ -316,10 +329,12 @@ def fig04():
     s_t, c_t = cdf(res)
     s_a, c_a = cdf(aff)
 
-    ax.plot(s_t, c_t, color=COLORS["blue"], lw=LW_MULTI, linestyle=line_style(0),
-            label="TPS (mean=%.3f px)" % tps_mean)
-    ax.plot(s_a, c_a, color=COLORS["tan"], lw=LW_MULTI, linestyle=line_style(1),
-            label="Affine (mean=%.3f px)" % aff_mean)
+    cdf_lines(ax, [
+        {"x": s_t, "y": c_t, "color": COLORS["blue"], "style": line_style(0),
+         "label": "TPS (mean=%.3f px)" % tps_mean},
+        {"x": s_a, "y": c_a, "color": COLORS["tan"], "style": line_style(1),
+         "label": "Affine (mean=%.3f px)" % aff_mean},
+    ])
 
     ax.set_title("Calibration Accuracy: TPS vs Affine Transform")
     ax.set_xlabel("Residual (px)")

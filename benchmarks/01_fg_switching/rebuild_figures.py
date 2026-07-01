@@ -11,7 +11,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI  # noqa: E402
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines  # noqa: E402
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -285,11 +285,14 @@ def fig02():
 # ======================================================================
 def fig03():
     fig, ax = plt.subplots(figsize=(9.5, 6))
+    series = []
     for i, c in enumerate(COLS):
         arr = np.sort(DATA[c])
         cdf = np.arange(1, arr.size + 1) / arr.size * 100.0
-        ax.step(arr, cdf, where="post", color=COLORS[CKEY[c]],
-                linestyle=line_style(i), label=SHORT[c], linewidth=LW_MULTI)
+        series.append({"x": arr, "y": cdf, "color": COLORS[CKEY[c]],
+                       "label": SHORT[c], "style": line_style(i),
+                       "step": "post"})
+    cdf_lines(ax, series)
 
     ax.set_xlabel("Switching Latency (ms)")
     ax.set_ylabel("Cumulative Percentage (%)")

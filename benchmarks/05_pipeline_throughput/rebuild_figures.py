@@ -13,7 +13,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines, CDF_COLORS
 
 import numpy as np
 import pandas as pd
@@ -170,12 +170,15 @@ def fig01():
     fig, ax = plt.subplots(figsize=(7.2, 5.6))
     x = np.arange(len(groups))
     w = 0.55
-    b1 = ax.bar(x, qw, w, label="Queue Wait", color=COLORS["grey"],
+    # Comment-flagged figure (圖4-5): reviewer said the three stacked
+    # segments were hard to tell apart, so this ONE bar figure opts into the
+    # CDF colour palette (blue / orange / green) instead of greyscale.
+    b1 = ax.bar(x, qw, w, label="Queue Wait", color=CDF_COLORS[0],
                 edgecolor="white", linewidth=1.0)
-    b2 = ax.bar(x, pr, w, bottom=qw, label="Process", color=COLORS["green"],
+    b2 = ax.bar(x, pr, w, bottom=qw, label="Process", color=CDF_COLORS[2],
                 edgecolor="white", linewidth=1.0)
     b3 = ax.bar(x, fg, w, bottom=np.array(qw) + np.array(pr), label="FG Write",
-                color=COLORS["tan"], edgecolor="white", linewidth=1.0)
+                color=CDF_COLORS[1], edgecolor="white", linewidth=1.0)
 
     totals = np.array(qw) + np.array(pr) + np.array(fg)
     for xi, t in zip(x, totals):
@@ -234,12 +237,14 @@ def fig02():
 def fig03():
     fig, ax = plt.subplots(figsize=(7.6, 5.6))
     ramp = COLORS["ramp5"]
+    series = []
     for i, r in enumerate(ROUNDS):
         s = np.sort(df[df["round"] == r]["total_ms"].values)
         cdf = np.arange(1, len(s) + 1) / len(s)
-        ax.plot(s, cdf, color=ramp[i % len(ramp)], linewidth=LW_MULTI,
-                linestyle=line_style(i),
-                label=f"Round {r} (mean={s.mean():.2f}ms)")
+        series.append({"x": s, "y": cdf, "color": ramp[i % len(ramp)],
+                       "style": line_style(i),
+                       "label": f"Round {r} (mean={s.mean():.2f}ms)"})
+    cdf_lines(ax, series)
     ax.set_xlabel("Total Frame Latency (ms)")
     ax.set_ylabel("CDF")
     ax.set_ylim(0, 1.02)

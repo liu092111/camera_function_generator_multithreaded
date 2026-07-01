@@ -21,7 +21,7 @@ import sys
 import os
 
 sys.path.insert(0, "/mnt/c/Users/liuuhua/Desktop/Git Repository/camera_function_generator_multithreaded/benchmarks")
-from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI
+from paper_style import apply_style, COLORS, save, finish, run_cli, line_style, grey_ramp, BAR_EDGE, BAR_EDGE_LW, LINE_BLACK, LW_MAIN, LW_MULTI, cdf_lines
 
 import numpy as np
 import pandas as pd
@@ -298,8 +298,8 @@ def fig02():
     ax.set_xlabel("Process Thread Latency (ms)")
     ax.set_title("Process Thread Latency Ridge Plot — 5 Rounds\n"
                  "(FG Switch Injection Active)")
+    finish(ax, frame=False)
     ax.spines["left"].set_visible(False)
-    finish(ax)
     fig.tight_layout()
     save(fig, os.path.join(HERE, "fig02_ridge_plot.png"))
 
@@ -537,18 +537,17 @@ def fig06():
     main_baseline = real + (MAIN_BASELINE - real_mean)      # reference (shifted)
     main_crossgroup = real + (MAIN_CROSSGROUP - real_mean)  # reference (shifted)
 
-    sx, sy = cdf(main_baseline)
-    axb.plot(sx, sy, color=COLORS["grey"], linewidth=LW_MULTI,
-             linestyle=line_style(0),
-             label="FG on Main Thread: Baseline")
-    sx, sy = cdf(main_crossgroup)
-    axb.plot(sx, sy, color=COLORS["purple"], linewidth=LW_MULTI,
-             linestyle=line_style(1),
-             label="FG on Main Thread: Cross-Group")
-    sx, sy = cdf(real)
-    axb.plot(sx, sy, color=COLORS["tan"], linewidth=LW_MULTI,
-             linestyle=line_style(2),
-             label="FG on Separate Thread: With Injection")
+    b_x, b_y = cdf(main_baseline)
+    c_x, c_y = cdf(main_crossgroup)
+    r_x, r_y = cdf(real)
+    cdf_lines(axb, [
+        {"x": b_x, "y": b_y, "color": COLORS["grey"], "style": line_style(0),
+         "label": "FG on Main Thread: Baseline"},
+        {"x": c_x, "y": c_y, "color": COLORS["purple"], "style": line_style(1),
+         "label": "FG on Main Thread: Cross-Group"},
+        {"x": r_x, "y": r_y, "color": COLORS["tan"], "style": line_style(2),
+         "label": "FG on Separate Thread: With Injection"},
+    ])
 
     axb.set_ylim(0, 1.02)
     axb.set_xlabel("Process Thread Latency (ms)")
