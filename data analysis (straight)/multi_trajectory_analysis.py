@@ -353,11 +353,6 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison",
     # 並同步調整 x 軸範圍以維持正方形框格（keep_square=True）
     add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14, keep_square=True)
 
-    # 添加圖例說明
-    smooth_info = f" (Smoothed: {SMOOTHING_METHOD})" if SMOOTHING_ENABLED else ""
-    ax.annotate(f"○ = Start, □ = End{smooth_info}", xy=(0.02, 0.02), xycoords='axes fraction',
-                fontsize=12, color='gray')
-    
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
     
@@ -560,9 +555,9 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
     ax.set_ylabel("Relative Angle (deg)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
-    # Y 軸以 5 度為一個單位
-    from matplotlib.ticker import MultipleLocator
-    ax.yaxis.set_major_locator(MultipleLocator(5))
+    # Y 軸刻度自動選取整數間距，控制刻度數量在可清楚標示的範圍（約 8~10 條）
+    from matplotlib.ticker import MaxNLocator
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=9, steps=[1, 2, 2.5, 5, 10], integer=True))
     #ax.grid(True, linestyle="--", alpha=0.4)
     # legend 放在繪圖區內左上角，並向上延伸 y 軸騰出空白帶，避免遮住角度曲線
     add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
@@ -640,10 +635,6 @@ def plot_multi_position_error(data_dict, output_path, title="Position Error"):
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
     add_legend_with_headroom(fig, ax, loc="upper left", fontsize=14)
-
-    ax.annotate("0 = On ideal straight line, + = Right, − = Left",
-                xy=(0.02, 0.02), xycoords='axes fraction',
-                fontsize=12, color='gray')
 
     plt.tight_layout(pad=2.0)
     fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
@@ -781,9 +772,7 @@ def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory De
     ax1.set_title("Instantaneous Heading Deviation from Vertical", fontsize=20, pad=15)
     ax1.tick_params(axis='both', which='major', labelsize=14)
     add_legend_with_headroom(fig, ax1, loc="upper left", fontsize=12)
-    ax1.annotate("0° = Moving vertically, + = Right, − = Left", xy=(0.02, 0.02),
-                 xycoords='axes fraction', fontsize=11, color='gray')
-    
+
     # --- 設定子圖 2 樣式 (累積偏移) ---
     ax2.axhline(y=0, color='gray', linestyle='--', alpha=0.5, lw=1)
     ax2.set_xlabel("Time (s)", fontsize=20, labelpad=12)

@@ -32,9 +32,9 @@ import angle_comparison_with_target as act
 # ============================================================
 
 CSV_FOLDER    = "file"   # CSV 檔案資料夾（相對於此腳本位置）
-OUTPUT_FOLDER = "clockwise_4degree2"      # 輸出資料夾（相對於此腳本位置）
+OUTPUT_FOLDER = "clockwise_3degree2"      # 輸出資料夾（相對於此腳本位置）
 
-TARGET_ANGLE    = 4    # 目標角度（°）
+TARGET_ANGLE    = 3    # 目標角度（°）
 STEP_START_TIME = None   # Step 起跳時間（秒），None = 自動偵測
 
 # 平滑參數

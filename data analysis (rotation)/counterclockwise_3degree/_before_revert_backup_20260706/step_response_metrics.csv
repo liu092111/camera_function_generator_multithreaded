@@ -1,0 +1,2 @@
+﻿name,target_angle_deg,rise_time_s,overshoot_deg,overshoot_pct,settling_time_s,steady_state_err_deg
+clockwise_3degree,-3,0.3231,0.0,0.0,0.7997 (±8%),0.41
