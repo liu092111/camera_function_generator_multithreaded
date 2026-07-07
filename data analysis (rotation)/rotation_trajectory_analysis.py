@@ -101,6 +101,15 @@ def savgol_smooth(data, window, poly):
     return out
 
 
+def format_label_name(name):
+    """把名稱中的 "Vpp" 轉成帶正體下標的 mathtext "V$_\\mathrm{pp}$"（大小寫不敏感）。
+
+    用 \\mathrm 讓下標 pp 為正體（非斜體）。
+    """
+    import re
+    return re.sub(r"[Vv]pp", r"V$_\\mathrm{pp}$", name)
+
+
 def smooth_data(data, method="savgol"):
     """
     對資料進行平滑處理
@@ -237,7 +246,7 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison (
             stat_parts.append(f"ω̄={avg_angular_vel:.1f}°/s")
         
         if stat_parts:
-            label = f"{name} ({', '.join(stat_parts)})"
+            label = f"{format_label_name(name)} ({', '.join(stat_parts)})"
         else:
             label = name
         
@@ -378,7 +387,7 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Angle vs Time Com
             avg_angular_vel = total_rotation / duration if duration > 0 else 0
         
         # 構建 legend 標籤（包含統計資訊 - 僅運動期間）
-        label = f"{name} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
+        label = f"{format_label_name(name)} (Δθ={total_rotation:.1f}°, ω̄={avg_angular_vel:.1f}°/s)"
         
         # 繪製完整資料（包含靜止部分）
         ax.plot(t_relative, angle_relative, lw=3, color=color, label=label, alpha=0.8)
@@ -476,7 +485,7 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
             mean_rate = np.mean(wv) if len(wv) else 0.0
         max_w = np.max(wv) if len(wv) else 0.0
 
-        label = f"{name} (Avg={mean_rate:.1f}, Max={max_w:.1f} °/s)"
+        label = f"{format_label_name(name)} (Avg={mean_rate:.1f}, Max={max_w:.1f} °/s)"
         ax.plot(t_relative, w, lw=3, color=color, label=label, alpha=0.85)
 
     # 設定圖表樣式
@@ -548,7 +557,7 @@ def plot_mean_angular_speed_bar(data_dict, output_path, title="Mean Angular Spee
                 ha='center', va='bottom', fontsize=18)
 
     ax.set_xticks(xpos)
-    ax.set_xticklabels(names, fontsize=18)
+    ax.set_xticklabels([format_label_name(n) for n in names], fontsize=18)
     ax.set_ylabel("Mean Angular Speed (°/s)", fontsize=22, labelpad=12)
     ax.set_title(title, fontsize=22, pad=15)
     ax.tick_params(axis='y', which='major', labelsize=16)

@@ -39,19 +39,19 @@ STARTUP_SPEED_THRESHOLD = 10.0  # 啟動速度閾值 (mm/s)，速度超過此值
 
 
 def format_label_name(name):
-    """把軌跡名稱中的 "Vpp" 轉成帶下標的 mathtext 形式 "V$_{pp}$"。
+    """把軌跡名稱中的 "Vpp" 轉成帶正體下標的 mathtext 形式 "V$_\\mathrm{pp}$"。
 
-    matplotlib 以 $...$ 內的 _{} 表示下標，因此圖例會顯示為 V 加上下標 pp。
+    matplotlib 以 $...$ 內的 _{} 表示下標，\\mathrm 讓下標 pp 為正體（非斜體）。
     大小寫不敏感（Vpp / VPP / vpp 皆可），其餘文字原樣保留。
 
     Args:
         name: 原始標籤字串（通常來自 CSV 檔名，例如 "36 Vpp"）
 
     Returns:
-        轉換後的字串，例如 "36 V$_{pp}$"
+        轉換後的字串，例如 "36 V$_\\mathrm{pp}$"
     """
     import re
-    return re.sub(r"[Vv]pp", "V$_{pp}$", name)
+    return re.sub(r"[Vv]pp", r"V$_\\mathrm{pp}$", name)
 
 
 def _legend_overlaps_data(ax, legend, renderer):
