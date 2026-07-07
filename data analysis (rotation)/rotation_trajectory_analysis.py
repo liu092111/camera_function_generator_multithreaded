@@ -40,6 +40,66 @@ MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 # 啟動偵測參數
 MOTION_START_THRESHOLD = 10.0  # 角速度閾值（°/s），超過此值視為開始運動
 
+# 角速度比較圖專用平滑參數
+#   原始 angular_vel_dps 為逐點微分，會被「微小角度變化 ÷ 極短幀距」放大成
+#   ±40~68°/s 的假尖峰，把真實 1~7°/s 的組間差距淹沒。故此圖改由「乾淨的
+#   unwrapped 角度」重新微分並強化平滑，讓不同電壓的角速度清楚分層。
+ANGVEL_SAVGOL_WINDOW = 31   # 角速度重算前後的 savgol 視窗（較大 → 更平滑）
+ANGVEL_SAVGOL_POLY   = 2    # savgol 多項式階數
+ANGVEL_INTERP_MAX_GAP = 20  # 角度內插補洞的最大缺口點數（超過保留斷線）
+ANGVEL_USE_MAGNITUDE = True # True=畫 |ω|（單向旋轉，取絕對值更易分層比較）
+
+
+def interp_nan(values, max_gap=None):
+    """線性內插補內部 NaN 缺口（兩側都有有限值才補），讓序列連續、微分不斷。"""
+    v = np.asarray(values, float).copy()
+    n = len(v)
+    finite = np.isfinite(v)
+    if finite.sum() < 2:
+        return v
+    idx = np.arange(n)
+    v_interp = np.interp(idx, idx[finite], v[finite])
+    i = 0
+    while i < n:
+        if finite[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and not finite[j]:
+            j += 1
+        if i - 1 >= 0 and j < n and (max_gap is None or (j - i) <= max_gap):
+            v[i:j] = v_interp[i:j]
+        i = j
+    return v
+
+
+def diff_with_dt_floor(values, t, dt_floor):
+    """一階差分 dv/dt，並對 dt 設下限，抑制掉幀（短 dt）造成的假尖峰。"""
+    v = np.full(len(values), np.nan)
+    for i in range(1, len(values)):
+        if np.isfinite(values[i]) and np.isfinite(values[i - 1]) and t[i] > t[i - 1]:
+            dt = max(t[i] - t[i - 1], dt_floor)
+            v[i] = (values[i] - values[i - 1]) / dt
+    return v
+
+
+def savgol_smooth(data, window, poly):
+    """對有限值序列做 savgol 平滑（視窗自動縮成奇數且不超過資料長度）。"""
+    data = np.asarray(data, float)
+    n = np.isfinite(data).sum()
+    if n < 5:
+        return data
+    w = min(window, n)
+    if w % 2 == 0:
+        w -= 1
+    if w < 5:
+        return data
+    p = min(poly, w - 1)
+    out = data.copy()
+    fin = np.isfinite(data)
+    out[fin] = savgol_filter(data[fin], w, p)
+    return out
+
 
 def smooth_data(data, method="savgol"):
     """
@@ -366,41 +426,70 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
     colors = plt.cm.tab10.colors
     
     # 繪製每條軌跡的角速度
+    #   不直接畫 CSV 的 angular_vel_dps（逐點微分，含短-dt 假尖峰、正負亂跳），
+    #   改由乾淨的 unwrapped 角度重新微分：內插補洞 → savgol 平滑角度 →
+    #   dt 下限差分 → 再平滑角速度。單向旋轉時取 |ω| 讓組間差距清楚分層。
     for i, (name, df) in enumerate(data_dict.items()):
-        if "angular_vel_dps" not in df.columns or "t_s" not in df.columns:
+        if "t_s" not in df.columns:
             continue
-        
-        t = df["t_s"].to_numpy()
-        angular_vel = df["angular_vel_dps"].to_numpy()
-        
-        # 轉換為相對時間（從 0 開始）
-        valid = np.isfinite(t) & np.isfinite(angular_vel)
-        t_valid = t[valid]
-        angular_vel_valid = angular_vel[valid]
-        
-        if len(t_valid) > 0:
-            t_relative = t_valid - t_valid[0]
-            color = colors[i % len(colors)]
-            
-            # 計算統計資訊
-            avg_angular_vel = np.mean(np.abs(angular_vel_valid))
-            max_angular_vel = np.max(np.abs(angular_vel_valid))
-            
-            # 構建 legend 標籤（包含統計資訊）
-            label = f"{name} (Avg={avg_angular_vel:.1f}, Max={max_angular_vel:.1f} °/s)"
-            
-            ax.plot(t_relative, angular_vel_valid, lw=3, color=color, label=label, alpha=0.8)
-    
+
+        t_all = df["t_s"].to_numpy(float)
+
+        # 優先用 angle_deg_unwrapped 重算；若無則退回 CSV 既有角速度
+        if "angle_deg_unwrapped" in df.columns:
+            ang = df["angle_deg_unwrapped"].to_numpy(float)
+            fin_t = np.isfinite(t_all)
+            t = t_all[fin_t]
+            ang = ang[fin_t]
+            if len(t) < 5:
+                continue
+            t_relative = t - t[0]
+
+            # dt 下限 = 中位數幀距，抑制掉幀放大
+            dt_arr = np.diff(t)
+            dt_arr = dt_arr[np.isfinite(dt_arr) & (dt_arr > 0)]
+            dt_floor = float(np.median(dt_arr)) if len(dt_arr) else 0.0
+
+            ang_i = interp_nan(ang, max_gap=ANGVEL_INTERP_MAX_GAP)
+            ang_s = savgol_smooth(ang_i, ANGVEL_SAVGOL_WINDOW, ANGVEL_SAVGOL_POLY)
+            w = diff_with_dt_floor(ang_s, t, dt_floor)
+            w = savgol_smooth(w, ANGVEL_SAVGOL_WINDOW, ANGVEL_SAVGOL_POLY)
+            if ANGVEL_USE_MAGNITUDE:
+                w = np.abs(w)
+        else:
+            if "angular_vel_dps" not in df.columns:
+                continue
+            w_raw = df["angular_vel_dps"].to_numpy(float)
+            valid = np.isfinite(t_all) & np.isfinite(w_raw)
+            t_relative = t_all[valid] - t_all[valid][0]
+            w = np.abs(w_raw[valid]) if ANGVEL_USE_MAGNITUDE else w_raw[valid]
+
+        color = colors[i % len(colors)]
+
+        # 統計：平均角速度用「總轉角 / 時間」（穩健、代表真實轉速），
+        # 峰值用平滑後角速度的最大絕對值
+        wv = w[np.isfinite(w)]
+        if "angle_deg_unwrapped" in df.columns:
+            fin_a = np.isfinite(ang_i)
+            mean_rate = abs(ang_i[fin_a][-1] - ang_i[fin_a][0]) / (t_relative[-1] - t_relative[0])
+        else:
+            mean_rate = np.mean(wv) if len(wv) else 0.0
+        max_w = np.max(wv) if len(wv) else 0.0
+
+        label = f"{name} (Avg={mean_rate:.1f}, Max={max_w:.1f} °/s)"
+        ax.plot(t_relative, w, lw=3, color=color, label=label, alpha=0.85)
+
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
-    ax.set_ylabel("Angular Velocity (°/s)", fontsize=24, labelpad=15)
+    ax.set_ylabel("Angular Speed (°/s)", fontsize=24, labelpad=15)
     ax.set_title(title, fontsize=22, pad=20)
     ax.tick_params(axis='both', which='major', labelsize=16)
     #ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="best", fontsize=14)
-    
-    # 添加零線
-    ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5, alpha=0.5)
+
+    # 取絕對值時不需要零線；保留有號時才畫零線
+    if not ANGVEL_USE_MAGNITUDE:
+        ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5, alpha=0.5)
     
     # 調整佈局以增加留白
     plt.tight_layout(pad=2.0)
@@ -409,6 +498,68 @@ def plot_multi_angular_velocity_comparison(data_dict, output_path, title="Angula
     fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
     plt.close(fig)
     print(f"✓ 角速度比較圖已儲存: {output_path}")
+
+
+def plot_mean_angular_speed_bar(data_dict, output_path, title="Mean Angular Speed"):
+    """繪製各組平均角速度長條圖（一目了然電壓越高轉越快）。
+
+    平均角速度 = |總轉角| / 持續時間（由 angle_deg_unwrapped 求得），這是最穩健、
+    最能代表「整體轉多快」的量，不受瞬時微分雜訊影響。長條顏色與角速度曲線圖一致。
+
+    Args:
+        data_dict: {檔案名稱: DataFrame} 字典
+        output_path: 輸出圖片路徑
+        title: 圖表標題
+    """
+    if not data_dict:
+        print("沒有資料可繪製")
+        return
+
+    colors = plt.cm.tab10.colors
+    names, rates, bar_colors = [], [], []
+    for i, (name, df) in enumerate(data_dict.items()):
+        if "angle_deg_unwrapped" not in df.columns or "t_s" not in df.columns:
+            continue
+        t = df["t_s"].to_numpy(float)
+        ang = df["angle_deg_unwrapped"].to_numpy(float)
+        m = np.isfinite(t) & np.isfinite(ang)
+        if m.sum() < 2:
+            continue
+        tt, aa = t[m], ang[m]
+        dur = tt[-1] - tt[0]
+        if dur <= 0:
+            continue
+        rate = abs(aa[-1] - aa[0]) / dur
+        names.append(name)
+        rates.append(rate)
+        bar_colors.append(colors[i % len(colors)])
+
+    if not names:
+        print("沒有可用的角度資料，跳過平均角速度長條圖")
+        return
+
+    fig, ax = plt.subplots(1, 1, figsize=(9, 7))
+    xpos = np.arange(len(names))
+    bars = ax.bar(xpos, rates, color=bar_colors, alpha=0.85, width=0.6,
+                  edgecolor='black', linewidth=1)
+    # 每根長條頂端標數值
+    for b, r in zip(bars, rates):
+        ax.text(b.get_x() + b.get_width() / 2, r, f"{r:.1f}",
+                ha='center', va='bottom', fontsize=18)
+
+    ax.set_xticks(xpos)
+    ax.set_xticklabels(names, fontsize=18)
+    ax.set_ylabel("Mean Angular Speed (°/s)", fontsize=22, labelpad=12)
+    ax.set_title(title, fontsize=22, pad=15)
+    ax.tick_params(axis='y', which='major', labelsize=16)
+    ax.set_ylim(0, max(rates) * 1.18)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.tight_layout(pad=2.0)
+    fig.savefig(output_path, dpi=1200, bbox_inches='tight', pad_inches=0.3)
+    plt.close(fig)
+    print(f"✓ 平均角速度長條圖已儲存: {output_path}")
 
 
 def print_statistics(data_dict):
@@ -506,8 +657,12 @@ def main():
     
     # 繪製角速度比較圖
     angular_vel_output = os.path.join(output_folder, "angular_velocity_comparison.png")
-    plot_multi_angular_velocity_comparison(data_dict, angular_vel_output, title="Angular Velocity Comparison")
-    
+    plot_multi_angular_velocity_comparison(data_dict, angular_vel_output, title="Angular Speed Comparison")
+
+    # 繪製平均角速度長條圖（一目了然的組間比較）
+    bar_output = os.path.join(output_folder, "mean_angular_speed_bar.png")
+    plot_mean_angular_speed_bar(data_dict, bar_output, title="Mean Angular Speed")
+
     print("\n" + "=" * 60)
     print("分析完成！")
     print("=" * 60)

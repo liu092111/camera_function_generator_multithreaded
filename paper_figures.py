@@ -39,6 +39,7 @@ POS_MAD_K      = 5.0    # 位置尖刺門檻（× 視窗 MAD）
 POS_FLOOR_PX   = 6.0    # 位置離群絕對地板（px）
 POS_SMOOTH_WIN = 5      # 位置移動平均視窗（幀）
 SMOOTH_WIN     = 5      # 角度/速度移動平均視窗（幀）
+ANG_INTERP_MAX_GAP = 15  # 角度內插補洞的最大缺口點數（超過則保留斷線，避免亂補長缺口）
 
 DEVICE_LONG_MM  = 9.0   # device 長邊（mm）
 DEVICE_SHORT_MM = 6.0   # device 短邊（mm）
@@ -124,12 +125,53 @@ def moving_average(a, w=POS_SMOOTH_WIN):
     return out
 
 
-def finite_diff(values, t):
-    """逐點一階差分（dv/dt），首點為 NaN。"""
+def finite_diff(values, t, dt_floor=None):
+    """逐點一階差分（dv/dt），首點為 NaN。
+
+    dt_floor：時間間隔下限。追蹤掉幀時相鄰時間戳可能極短（例如 0.002s，
+    遠小於中位數 0.012s），若直接相除會把微小角度變化放大成數百 deg/s 的
+    假尖峰。設下限後 dt 至少為 dt_floor，抑制此類假訊號。對等間隔資料
+    （dt 均等於中位數）此下限不會觸發，結果與原本完全相同。
+    """
     v = np.full(len(values), np.nan)
     for i in range(1, len(values)):
         if np.isfinite(values[i]) and np.isfinite(values[i - 1]) and t[i] > t[i - 1]:
-            v[i] = (values[i] - values[i - 1]) / (t[i] - t[i - 1])
+            dt = t[i] - t[i - 1]
+            if dt_floor is not None:
+                dt = max(dt, dt_floor)
+            v[i] = (values[i] - values[i - 1]) / dt
+    return v
+
+
+def interp_nan(values, max_gap=None):
+    """線性內插補內部 NaN 缺口，讓序列連續（供微分與畫實體線用）。
+
+    僅補「兩側都有有限值」的內部缺口；序列開頭/結尾的 NaN 不外插。
+    追蹤暫時失敗留下的 NaN 缺口補起來後，畫線即為實體不斷線。
+
+    Args:
+        values: 一維序列
+        max_gap: 缺口點數上限；超過此長度的缺口保留 NaN 不補。None=全部內部缺口都補。
+    """
+    v = np.asarray(values, float).copy()
+    n = len(v)
+    finite = np.isfinite(v)
+    if finite.sum() < 2:
+        return v
+    idx = np.arange(n)
+    v_interp = np.interp(idx, idx[finite], v[finite])
+    i = 0
+    while i < n:
+        if finite[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and not finite[j]:
+            j += 1
+        # 內部缺口 [i, j)：左右都有有限值才補，且不超過 max_gap
+        if i - 1 >= 0 and j < n and (max_gap is None or (j - i) <= max_gap):
+            v[i:j] = v_interp[i:j]
+        i = j
     return v
 
 
@@ -211,7 +253,13 @@ def process_csv(ds):
         ang_raw_s = ang_raw_s + np.degrees(phi) + (180.0 if flipped else 0.0)
     ang_unwrap = moving_average(hampel_1d(df["angle_deg_unwrapped"].to_numpy(float),
                                           floor=2.0), SMOOTH_WIN)
-    ang_vel = moving_average(finite_diff(ang_unwrap, t), SMOOTH_WIN)
+    # 角速度：先把追蹤失敗留下的內部 NaN 缺口內插補起來（畫線才連續、微分才不斷），
+    # 再以「dt 下限 = 中位數 dt」的差分抑制掉幀造成的短-dt 假尖峰，最後平滑。
+    dt_arr = np.diff(t)
+    dt_arr = dt_arr[np.isfinite(dt_arr) & (dt_arr > 0)]
+    dt_floor = float(np.median(dt_arr)) if len(dt_arr) else None
+    ang_for_vel = interp_nan(ang_unwrap, max_gap=ANG_INTERP_MAX_GAP)
+    ang_vel = moving_average(finite_diff(ang_for_vel, t, dt_floor=dt_floor), SMOOTH_WIN)
 
     out = pd.DataFrame({
         "frame": df["frame"].to_numpy(),
@@ -344,6 +392,7 @@ def plot_speed(df, ds, out_dir):
 
 def plot_angular_speed(df, ds, out_dir):
     t, w = df["t_s"].to_numpy(), df["angular_vel_dps"].to_numpy()
+    t = t - t[np.isfinite(t)][0]  # 時間軸歸零，各組一致從 0 開始
     fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
     ax.plot(t, w, lw=2, color="#1f77b4", label="Angular speed (deg/s)")
     fin = np.isfinite(w)
@@ -365,6 +414,8 @@ def plot_angular_speed(df, ds, out_dir):
 
 def plot_theta(df, ds, out_dir):
     t, th = df["t_s"].to_numpy(), df["angle_deg_unwrapped"].to_numpy()
+    t = t - t[np.isfinite(t)][0]  # 時間軸歸零，各組一致從 0 開始
+    th = interp_nan(th, max_gap=ANG_INTERP_MAX_GAP)  # 補內部缺口，畫實體線
     fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
     ax.plot(t, th, lw=2, color="#1f77b4", label="θ (deg)")
     fin = np.isfinite(th)

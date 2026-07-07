@@ -38,6 +38,22 @@ MOVING_AVG_WINDOW = 5  # 移動平均窗口大小
 STARTUP_SPEED_THRESHOLD = 10.0  # 啟動速度閾值 (mm/s)，速度超過此值視為已啟動
 
 
+def format_label_name(name):
+    """把軌跡名稱中的 "Vpp" 轉成帶下標的 mathtext 形式 "V$_{pp}$"。
+
+    matplotlib 以 $...$ 內的 _{} 表示下標，因此圖例會顯示為 V 加上下標 pp。
+    大小寫不敏感（Vpp / VPP / vpp 皆可），其餘文字原樣保留。
+
+    Args:
+        name: 原始標籤字串（通常來自 CSV 檔名，例如 "36 Vpp"）
+
+    Returns:
+        轉換後的字串，例如 "36 V$_{pp}$"
+    """
+    import re
+    return re.sub(r"[Vv]pp", "V$_{pp}$", name)
+
+
 def _legend_overlaps_data(ax, legend, renderer):
     """檢查 legend 框是否與任何資料線重疊（皆換算到資料座標後比較）。
 
@@ -315,10 +331,11 @@ def plot_multi_trajectories(data_dict, output_path, title="Position Comparison",
             if avg_offset is not None:
                 stat_parts.append(f"Offset={avg_offset:.1f}°")
 
-            label = f"{name} ({', '.join(stat_parts)})" if stat_parts else name
+            disp_name = format_label_name(name)
+            label = f"{disp_name} ({', '.join(stat_parts)})" if stat_parts else disp_name
         else:
             # 簡化版：只顯示材料名稱
-            label = name
+            label = format_label_name(name)
         
         # 繪製平滑後的軌跡
         ax.plot(x_smooth, y_smooth, lw=3, color=color, label=label, alpha=0.8)
@@ -409,7 +426,7 @@ def plot_multi_speed_comparison(data_dict, output_path, title="Speed Comparison"
             max_speed = np.max(speed_valid)
             
             # 構建 legend 標籤（包含統計資訊）
-            label = f"{name} (Avg={avg_speed:.1f}, Max={max_speed:.1f} mm/s)"
+            label = f"{format_label_name(name)} (Avg={avg_speed:.1f}, Max={max_speed:.1f} mm/s)"
             
             ax.plot(t_relative, speed_valid, lw=3, color=color, label=label, alpha=0.8)
             
@@ -478,7 +495,7 @@ def plot_multi_speed_simple(data_dict, output_path, title="Speed Comparison (Sim
             color = colors[i % len(colors)]
             
             # Legend 只顯示檔案名稱
-            ax.plot(t_relative, speed_valid, lw=3, color=color, label=name, alpha=0.8)
+            ax.plot(t_relative, speed_valid, lw=3, color=color, label=format_label_name(name), alpha=0.8)
     
     # 設定圖表樣式
     ax.set_xlabel("Time (s)", fontsize=24, labelpad=15)
@@ -546,7 +563,7 @@ def plot_multi_angle_comparison(data_dict, output_path, title="Orientation Compa
             avg_offset = np.mean(np.abs(angle_relative))
             
             # 構建 legend 標籤（包含統計資訊）
-            label = f"{name} (Avg Offset = {avg_offset:.2f}°)"
+            label = f"{format_label_name(name)} (Avg Offset = {avg_offset:.2f}°)"
             
             ax.plot(t_relative, angle_relative, lw=3, color=color, label=label, alpha=0.8)
     
@@ -622,7 +639,7 @@ def plot_multi_position_error(data_dict, output_path, title="Position Error"):
         # 統計：最大絕對偏移與 RMS 偏移
         max_abs = np.max(np.abs(lateral_error))
         rms = np.sqrt(np.mean(lateral_error**2))
-        label = f"{name} (Max={max_abs:.2f}, RMS={rms:.2f} mm)"
+        label = f"{format_label_name(name)} (Max={max_abs:.2f}, RMS={rms:.2f} mm)"
 
         ax.plot(vertical_distance, lateral_error, lw=3, color=color,
                 label=label, alpha=0.8)
@@ -732,23 +749,25 @@ def plot_multi_trajectory_deviation(data_dict, output_path, title="Trajectory De
         valid_heading = instant_heading[np.isfinite(instant_heading)]
         valid_cumul = cumul_deviation[np.isfinite(cumul_deviation)]
         
+        disp_name = format_label_name(name)
+
         # heading 統計
         if len(valid_heading) > 0:
             avg_heading = np.mean(valid_heading)
-            label_heading = f"{name} (Avg={avg_heading:.2f}°)"
+            label_heading = f"{disp_name} (Avg={avg_heading:.2f}°)"
         else:
-            label_heading = name
-        
+            label_heading = disp_name
+
         # 累積偏移統計
         if len(valid_cumul) > 0:
             avg_cumul = np.mean(np.abs(valid_cumul))
-            label_cumul = f"{name} (Avg |θ|={avg_cumul:.2f}°)"
+            label_cumul = f"{disp_name} (Avg |θ|={avg_cumul:.2f}°)"
         else:
-            label_cumul = name
-        
+            label_cumul = disp_name
+
         # 橫向偏移統計
         final_lateral_offset = dx_cumul[-1]
-        label_lateral = f"{name} (Final offset={final_lateral_offset:.3f} mm)"
+        label_lateral = f"{disp_name} (Final offset={final_lateral_offset:.3f} mm)"
         
         # --- 子圖 1: 瞬時 heading 偏移角度 vs 時間 ---
         valid_h = np.isfinite(instant_heading)
