@@ -1,0 +1,160 @@
+================================================================================
+第四章 圖片對照表（論文圖號 ↔ benchmarks PNG 檔案）
+產生日期：2026-07-01
+================================================================================
+
+================================================================================
+一、由 benchmarks 腳本產生（本次已全部重繪 ✔）
+================================================================================
+
+圖4-4  影像採樣率驗證實驗架設
+       → 05_pipeline_throughput\fig00_test_architecture.png                  ✔已更新
+
+圖4-5  每幀延遲三組成分解（Queue Wait / Process / FG Write）
+       → 05_pipeline_throughput\fig01_stacked_decomposition.png              ✔已更新
+       （審查重點：已上色 + 加黑框；若你認為應為 FG-Active/Idle 比較圖，
+         替代檔為 05_pipeline_throughput\fig05_fg_comparison.png）【推測】
+
+圖4-6  五輪 Process Thread 延遲一致性
+       → 05_pipeline_throughput\fig02_per_round_bar.png                      ✔已更新
+
+圖4-7  五輪總幀延遲累積分布（CDF）
+       → 05_pipeline_throughput\fig03_cdf_rounds.png                         ✔已更新
+       （審查重點：CDF 五線改為顏色+虛線+淡色襯底，已可分辨）
+
+圖4-13 三執行緒控制系統整體架構示意圖
+       → 02_process_thread\fig00a_pipeline_architecture.png                  ✔已更新
+
+圖4-14 影像處理效能驗證三種評估模式（Mode A/B/C）
+       → 02_process_thread\fig00b_test_conditions.png                        ✔已更新
+
+圖4-15 影像處理管線各步驟延遲占比
+       → 02_process_thread\fig04_step_breakdown.png                          ✔已更新
+       （審查重點：百分比已統一小數點後一位）
+
+圖4-16 各步驟延遲跨輪一致性
+       → 02_process_thread\fig01_grouped_bar_steps.png                       ✔已更新
+
+圖4-17 五輪總延遲平均值與P99統計   ★審查重點：菱形點數字錯誤，已修正
+       → 02_process_thread\fig03_round_bar_errorbar.png                      ✔已更新
+       （原本菱形位在 P99(~3.08)卻標成平均值(1.763)，數字與Y軸位置矛盾；
+         已修正為：平均值標在柱頂、P99 標在菱形上「P99 3.093」，各自對應Y位置。
+         兩者同單位同軸，故不需第二Y軸。）
+
+圖4-18 五輪總延遲累積分布（CDF）
+       → 02_process_thread\fig02_cdf_5rounds.png                             ✔已更新
+       （審查重點：CDF 線改雙層粗細/顏色，已可分辨）
+
+圖4-19 執行緒隔離性實驗架設
+       → 04_combined_latency\fig00_test_architecture.png                     ✔已更新
+
+圖4-20 四場景 Process Thread 延遲比較   ★審查重點：菱形點數字
+       → 04_combined_latency\fig02_bar_errorbar.png                          ✔已更新
+       （此圖本來就正確：平均值標在柱頂、P99 標在菱形上，兩者同單位同軸；
+         已加大字體與黑框。）
+
+圖4-21 隔離性結論
+       → 04_combined_latency\fig07_isolation_conclusion.png                  ✔已更新
+
+圖4-22 四場景 Process Thread 延遲 CDF 疊加
+       → 04_combined_latency\fig03_cdf_overlay.png                           ✔已更新
+
+圖4-23 模式切換實驗架設
+       → 06_mode_switch_impact\fig00_test_architecture.png                   ✔已更新
+
+圖4-24 模式切換事件前後5幀延遲比較
+       → 06_mode_switch_impact\fig04_before_after.png                        ✔已更新
+
+圖4-25 模式切換注入實驗五輪一致性
+       → 06_mode_switch_impact\fig03_per_round_bar.png                       ✔已更新
+
+圖4-26 跨條件交叉驗證圖
+       → 06_mode_switch_impact\fig06_t04_vs_t06_comparison.png               ✔已更新
+       （右側 CDF 三線改雙層粗細/顏色，已可分辨）
+
+圖4-27 E2E 延遲三段定義與兩種 SCPI 指令策略架設示意圖
+       → 03_end_to_end_latency\fig00_test_architecture.png                   ✔已更新
+
+圖4-28 兩種 SCPI 指令策略之 FG Write 延遲 CDF
+       → 03_end_to_end_latency\fig01_cdf_fg_write.png                        ✔已更新
+       （審查重點：CDF 線已可分辨；註解百分比已改小數點後一位）
+
+圖4-29 兩種 SCPI 指令策略 E2E 總延遲三段組成比較
+       → 03_end_to_end_latency\fig04_stacked_bar.png                         ✔已更新
+
+圖4-30 執行緒系統時間預算利用率
+       → 08_system_budget\fig01_budget_bar.png                               ✔已更新
+
+圖4-31 Process Thread 與 Main Thread 五輪逐輪延遲一致性
+       → 08_system_budget\fig05_per_round_grouped.png                        ✔已更新
+
+圖4-32 Process Thread 五輪延遲累積分布（CDF）
+       → 08_system_budget\fig02_cdf_rounds.png                               ✔已更新
+
+圖4-36 TPS映射與仿射轉換校正殘差累積分布比較
+       → 07_calibration_quality\fig04_tps_vs_affine.png                      ✔已更新
+
+圖4-37 TPS映射驗證點排序殘差曲線
+       → 07_calibration_quality\fig01_sorted_residual.png                    ✔已更新
+       （審查重點：百分位參考線百分比為小數點後一位）
+
+圖4-38 TPS殘差直方圖與累積分布
+       → 07_calibration_quality\fig05_histogram_cumulative.png               ✔已更新
+
+圖4-39 TPS殘差空間分布圖（熱圖）   ★審查重點：須說明每格大小
+       → 07_calibration_quality\fig02_spatial_heatmap.png                    ✔已更新
+       （已改 viridis 彩色，並加註「校準格線 5mm、驗證點 10px/格」）
+
+圖4-40 四同心環形區域之殘差均值
+       → 07_calibration_quality\fig03_zone_bar.png                           ✔已更新
+
+圖4-43 SCPI指令策略切換延遲量測實驗架設
+       → 01_fg_switching\fig00_test_architecture.png                         ✔已更新
+
+圖4-44 第一代與第三代策略切換延遲比較（對數尺度）
+       → 01_fg_switching\fig04_gen_comparison.png                            ✔已更新
+
+圖4-45 第三代策略五種切換場景延遲比較
+       → 01_fg_switching\fig02_bar_errorbar.png                              ✔已更新
+
+圖4-46 第三代策略五種場景延遲累積分布（CDF）   ★審查重點：線無法分辨
+       → 01_fg_switching\fig03_cdf.png                                       ✔已更新
+       （五條 CDF 改為顏色+虛線+淡色襯底雙層，已清楚可分辨）
+
+圖4-35 TPS畸變校正離線建立與即時應用流程
+       → 07_calibration_quality\fig00_test_architecture.png                  ✔已更新【推測】
+       （此為流程示意圖；請確認是否即此檔）
+
+================================================================================
+二、非 benchmarks 腳本產生（拍攝影像／外部引用／Word 手繪）— 需你自行處理
+================================================================================
+
+圖4-1  控制系統架構圖 ................................. Word 手繪／示意圖
+圖4-2  Global Shutter 與 Rolling Shutter 示意圖 [37] .. 外部引用圖
+圖4-3  Arducam B0332 相機模組 ........................ 產品照片
+圖4-8  視覺座標校準整體流程圖 ......................... 流程示意圖（與 4-35 不同張）
+圖4-9  原始影像格線交叉點偵測結果 ..................... 拍攝影像 ★審查提到「每格大小」：
+                                                       此為 5mm 格線標靶影像，建議於圖說或圖上標註格距 5mm
+圖4-10 TPS校正後有效影像區域 ......................... 處理後影像
+圖4-11 原始影像及校正後影像比對圖 ..................... 處理後影像
+圖4-12 物理座標定義示意圖 ............................. 示意圖
+圖4-33 (A)原始影像與 (B)視覺追蹤處理結果 ............. 拍攝／處理影像
+圖4-34 形態學開運算處理步驟示意圖 ..................... 示意圖
+圖4-41 位置與速度估測示意圖 ........................... 示意圖
+圖4-42 四種驅動模式與馬達運動方向之對應關係示意圖 ..... 示意圖
+圖4-47 視覺回授閉迴路控制系統方塊圖 ................... 方塊示意圖
+
+================================================================================
+三、備註
+================================================================================
+1. docx 內的圖片不會自動更新，需將上表 PNG 逐一重新插入／替換到論文檔中。
+2. benchmarks 各資料夾內尚有未被第四章引用的圖（如各 fig06_summary_table、
+   01\fig01_violin_strip、01\fig05_histogram_kde、03\fig02_boxplot_segments、
+   03\fig03_per_round_fg、03\fig05_histogram_fg、04\fig01_ridge_plot、
+   04\fig04_grouped_bar_rounds、04\fig05_dual_axis、05\fig04_timeseries、
+   05\fig07_stability_correlation、06\fig01_timeseries_switches、
+   06\fig02_ridge_plot、06\fig05_summary_table、07\fig06_summary_table、
+   08\fig00_test_architecture、08\fig03_timeseries_3threads、08\fig04_main_breakdown 等），
+   若後續要補進論文可直接取用，皆已套用新樣式。
+3. 標【推測】處請務必目視確認；如需我調整任一對標，直接告訴我圖號即可。
+================================================================================
